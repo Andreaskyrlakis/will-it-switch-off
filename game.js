@@ -29,7 +29,7 @@ import { Sky } from "./sky.js";
 // Where the heavy media files (films, 3D clouds, stills) are. Online they come from MEDIA_ONLINE (a Cloudflare R2
 // bucket, the same folders as media/); on this computer (localhost) the page reads the local media/ folder.
 // ?media=<address> in the address bar overrides both (for example to test the online files from localhost).
-const MEDIA_ONLINE = "";
+const MEDIA_ONLINE = "https://pub-d65907a2314b451f93eec089912119be.r2.dev/";
 const LOCAL = ["localhost", "127.0.0.1", "[::1]", ""].includes(location.hostname);
 const MEDIA_BASE = new URLSearchParams(location.search).get("media") || (LOCAL || !MEDIA_ONLINE ? "media/" : MEDIA_ONLINE);
 
