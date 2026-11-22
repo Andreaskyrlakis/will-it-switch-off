@@ -4,8 +4,8 @@ A browser game about galaxies. Choose a kind of galaxy in a sky of 12,710 real g
 simulation (TNG100-1), watch its real past, bet on whether it will stop making stars, let a machine-learning model
 bet too, then watch its real future.
 
-The game is the public part of a master's capstone project on galaxy quenching: the data, the model and the scripts that render the films live in the capstone repository,
-`galaxy-quenching-capstone`.
+The game is the public part of a master's capstone project on galaxy quenching; the data work, the model and the
+scripts that render the films belong to that project and are not published here.
 
 ## What is here
 
