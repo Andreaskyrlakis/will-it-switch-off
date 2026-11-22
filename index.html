@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Will It Switch Off?</title>
+  <meta name="description" content="Guess whether a real simulated galaxy stops forming stars, then watch what really happened.">
+  <meta name="theme-color" content="#03040b">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%2303040b%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%224%22 fill=%22%23eef1ff%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%229%22 fill=%22none%22 stroke=%22%23eef1ff%22 stroke-opacity=%22.45%22 stroke-width=%221.5%22/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600&family=Unbounded:wght@300;500&family=Doto:ROND,wght@100,800;100,900&display=swap">
+  <link rel="stylesheet" href="game.css">
+  <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body data-screen="home" data-rounds="0">
+<!--
+  Map of this page
+  ================
+  The whole game is this one page. Every screen is a <section class="screen"> inside <main>; only one
+  shows at a time. game.js (block 4, the interface) writes the current screen in <body data-screen="...">
+  and game.css shows the section whose id matches (section 4b of game.css).
+
+  Screens (data-screen  ->  section id)        what it is                              driven by
+    home      -> #screen-home       the title, how a round goes, Start, three cards    game.js
+    showcase  -> #screen-showcase   the list of three remarkable galaxies              game.js
+    meet      -> #screen-meet       one remarkable galaxy before its film              game.js
+    choose    -> #screen-choose     the four questions, the count of galaxies          game.js (the sky narrows: sky.js)
+    film      -> #screen-film       the film, the bet, the model's gauge, the chart    game.js (the chart: charts.js)
+    verdict   -> #screen-verdict    what happened, both bets, the way into 3D          game.js (the coloured sky: sky.js)
+    3d        -> #screen-3d         the galaxy in 3D through time                      game.js (the 3D drawing: viewer3d.js)
+
+  Around the screens, in the order of this file:
+    the opening script (just below), the cosmic web picture (.cosmos) and the sky canvas (#sky, drawn by sky.js),
+    the opening (#intro), the header (title, score, music button: sound.js, full screen), <main> with the sky's
+    axis words and the seven screens, the finale (#finale), "How this was made" (#made-link, #made),
+    and the scripts: game.js (a module that imports sky.js and charts.js, and loads viewer3d.js on the 3D screen)
+    and sound.js (the music, block 5).
+-->
+<!-- before anything is drawn: decide whether the opening plays, and hide the page if so -->
+<script>
+  // hide the page before its first paint when the opening will play (first visit, motion allowed)
+  try {
+    if (sessionStorage.getItem("will-it-switch-off:intro-seen") !== "1" && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      document.body.classList.add("intro-on");
+      // safety: if the opening has not started after 8 s (data failed to load), show the page anyway
+      setTimeout(function () {
+        var intro = document.getElementById("intro");
+        if (intro && intro.hidden) document.body.classList.remove("intro-on");
+      }, 8000);
+    }
+  } catch (error) { /* no storage: no opening */ }
+</script>
+<!-- the sky (block 3): the faint cosmic web with its travelling band of light, then the canvas sky.js draws the galaxies on -->
+<div class="cosmos" aria-hidden="true"><div class="cosmos-light"><div class="cosmos-band"></div></div></div>
+<canvas id="sky" aria-hidden="true"></canvas>
+<!-- the opening: one real galaxy in starlight shrinks into its own point of light in the sky -->
+<div class="intro" id="intro" hidden>
+  <div class="intro-galaxy" id="intro-galaxy" aria-hidden="true"></div>
+  <p class="intro-caption" id="intro-caption" hidden></p>
+  <p class="intro-skip">tap or press any key to skip</p>
+</div>
+
+<!-- the header, on every screen: the small title (back to the start), the score, the music button (sound.js), full screen -->
+<header class="top">
+  <button class="wordmark" id="home-link" aria-label="Back to the start">Will it switch off?</button>
+  <p class="score" aria-live="polite">you <b id="score-you">0</b><span class="of">/<span class="rounds">0</span></span>
+    <span class="gap"></span>model <b id="score-model">0</b><span class="of">/<span class="rounds">0</span></span></p>
+  <div class="sound-box" id="sound-box">
+  <input class="sound-volume" id="sound-volume" type="range" min="0" max="100" step="1" value="30" aria-label="Music volume">
+  <button class="sound" id="sound-toggle" type="button" aria-pressed="false" aria-label="Turn the music on" title="Music off">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke="none"/>
+      <path class="wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>
+      <path class="mute" d="M16 9.5l5 5M21 9.5l-5 5"/>
+    </svg>
+  </button>
+  </div>
+  <!-- the whole game full screen; shown only where the browser allows it for the page (not on iPhones) -->
+  <button class="icon-btn page-fs" id="page-fs" type="button" aria-label="Show the game full screen" title="Full screen" hidden>
+    <svg class="enter" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5"/></svg>
+    <svg class="exit" viewBox="0 0 20 20" aria-hidden="true"><path d="M8 3v5H3M17 8h-5V3M12 17v-5h5M3 12h5v5"/></svg>
+  </button>
+</header>
+
+<main>
+  <!-- the sky's two axes, quiet -->
+  <span class="axis axis-x" aria-hidden="true">more stars</span>
+  <span class="axis axis-y" aria-hidden="true">more gas for each star</span>
+  <span class="axis axis-found" id="found-count" aria-live="polite"></span>
+
+  <!-- home -->
+  <section class="rail screen" id="screen-home">
+    <p class="credit-line">Every galaxy image in this game was rendered by Andreas Kyrlakis from real IllustrisTNG simulation data.</p>
+    <h1>Will it switch off?</h1>
+    <p class="lede">Every point of light here is a real galaxy from a simulated universe. Galaxies make new stars out of cold gas, and some suddenly stop: they <em>switch off</em>.</p>
+    <!-- the three steps of a round, in the game's colours: the sky's blue, the films' amber, the switched-off red -->
+    <ol class="round-steps" aria-label="Pick one, watch it grow, and bet on its future.">
+      <li class="rs rs-pick"><span class="rs-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.4" class="fill"/></svg></span><span class="rs-say">Pick one</span></li>
+      <li class="rs rs-grow"><span class="rs-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7.2v9.6l7.6-4.8z" class="fill"/></svg></span><span class="rs-say">Watch it grow</span></li>
+      <li class="rs rs-bet"><span class="rs-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 16a7.5 7.5 0 0 1 15 0"/><path d="M12 16l4-5"/><circle cx="12" cy="16" r="1.6" class="fill"/></svg></span><span class="rs-say">Bet on its future</span></li>
+    </ol>
+    <div class="actions"><button class="btn primary" id="go-choose" disabled>Start</button></div>
+    <div class="home-cards" id="home-cards" hidden>
+      <p class="home-cards-say">Or meet a remarkable one, no bet needed.</p>
+      <ol class="cards" id="home-cards-list"></ol>
+    </div>
+  </section>
+
+  <!-- three remarkable galaxies, no bet needed -->
+  <section class="rail screen" id="screen-showcase">
+    <h2 id="showcase-title">Three remarkable galaxies</h2>
+    <ol class="showcase-list" id="showcase-list"></ol>
+    <div class="actions"><button class="btn quiet" id="showcase-back">Back</button></div>
+  </section>
+
+  <!-- a remarkable galaxy, before its film: its picture, its name, why it is remarkable -->
+  <section class="rail screen" id="screen-meet" aria-labelledby="meet-title">
+    <h2 id="meet-title"></h2>
+    <div class="meet-figure" id="meet-figure"></div>
+    <p class="meet-intro" id="meet-intro"></p>
+    <div class="actions"><button class="btn primary" id="meet-go">Watch its life</button><button class="btn quiet" id="meet-back">Back</button></div>
+  </section>
+
+  <!-- choosing: one question at a time; the sky narrows to the galaxies that fit. On a wider screen the four
+       questions are stops on a line beside the sky (the list below becomes those stops). -->
+  <section class="rail screen" id="screen-choose">
+    <ol class="steps" id="steps" aria-label="Your answers so far"></ol>
+    <div class="question" data-key="size">
+      <div class="q-head"><h2>How big is your galaxy?</h2>
+        <!-- how many galaxies fit the answers so far: beside the open question, then above the button -->
+        <p class="count" id="count-box"><b class="odo" id="count" aria-hidden="true">12,710</b><span id="count-text" aria-hidden="true">galaxies like this</span><span class="sr-only" id="count-say" aria-live="polite"></span></p>
+      </div>
+      <div class="options">
+        <button class="option" data-value="small">Small<small>about a billion suns of stars</small></button>
+        <button class="option" data-value="medium">Medium<small>a few billion suns</small></button>
+        <button class="option" data-value="large">Large<small>tens of billions of suns</small></button>
+      </div>
+    </div>
+    <div class="question" data-key="gas" hidden>
+      <div class="q-head"><h2>How much gas does it have?</h2></div>
+      <div class="options">
+        <button class="option" data-value="lots of gas">Lots<small>plenty of fuel for new stars</small></button>
+        <button class="option" data-value="some gas">Some<small>a middle amount of fuel</small></button>
+        <button class="option" data-value="little gas">Little<small>the fuel tank is low</small></button>
+      </div>
+    </div>
+    <div class="question" data-key="wind" hidden>
+      <div class="q-head"><h2>What is its black hole doing?</h2></div>
+      <div class="options">
+        <button class="option" data-value="quiet">Staying quiet<small>it only heats the gas around it</small></button>
+        <button class="option" data-value="blowing wind">Blowing a wind<small>it has switched to its powerful wind mode</small></button>
+      </div>
+    </div>
+    <div class="question" data-key="place" hidden>
+      <div class="q-head"><h2>Where does it live?</h2></div>
+      <div class="options">
+        <button class="option" data-value="alone">Alone<small>the main galaxy of its group</small></button>
+        <button class="option" data-value="orbiting a bigger galaxy">Around a bigger galaxy<small>orbiting through its hot gas</small></button>
+      </div>
+    </div>
+    <!-- wider screen: the stops after the open question, here so the keyboard meets them after its answers -->
+    <ol class="steps steps-next" id="steps-next" aria-label="Later questions"></ol>
+    <div class="count-end" id="count-end"></div>
+    <p class="note" id="box-note" hidden></p>
+    <div class="met" id="met-note" hidden>
+      <p>You have already met this galaxy.</p>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="go-past" hidden>Watch its past</button>
+      <button class="btn primary" id="met-other" hidden>Pick another</button>
+      <button class="btn quiet" id="met-again" hidden>Watch it again</button>
+    </div>
+  </section>
+
+  <!-- the film: past, bet, the model thinking, the future -->
+  <section class="screen" id="screen-film" aria-label="The film of your galaxy">
+    <figure class="stage" id="stage">
+      <div class="film" id="film-box" data-state="loading">
+        <video id="film" muted playsinline preload="auto"></video>
+        <video id="film-stars" class="stars-inset" muted playsinline preload="auto" aria-hidden="true" hidden></video>
+        <div class="labels" id="labels" aria-hidden="true">
+          <p class="when"><span id="l-when">3.50</span> billion years ago<small id="l-blend"></small></p>
+          <p class="stats"><span id="l-mass"></span><span id="l-sfr"></span></p>
+          <p class="scale"><i id="l-scalebar"></i><span id="l-scale"></span></p>
+          <p class="stars-label" id="l-stars" hidden>stars</p>
+        </div>
+        <div class="veil" id="veil">
+          <div class="thinking" id="thinking" hidden>
+            <p class="thinking-head">The model is reading 17 numbers about this galaxy</p>
+            <p class="thinking-item" id="thinking-item">&nbsp;</p>
+            <ol class="thinking-dots" id="thinking-dots" aria-hidden="true"></ol>
+            <p class="thinking-foot">It never sees the film.</p>
+          </div>
+        </div>
+        <div class="film-status" id="film-status" role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="film-status-text">Loading the film&hellip;</span>
+          <button class="btn quiet" id="film-skip" hidden>Continue without the film</button>
+        </div>
+        <button class="icon-btn fs" id="fullscreen" aria-label="Show the film full screen" title="Full screen">
+          <svg class="enter" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5"/></svg>
+          <svg class="exit" viewBox="0 0 20 20" aria-hidden="true"><path d="M8 3v5H3M17 8h-5V3M12 17v-5h5M3 12h5v5"/></svg>
+        </button>
+      </div>
+      <!-- the model's gauge: its chance that the galaxy switches off, with its line (past it, it bets "switches off").
+           Shown from your bet; its needle swings during the future and stops on the model's real chance at the end. -->
+      <div class="gauge" id="gauge" hidden aria-hidden="true">
+        <svg viewBox="0 0 200 122">
+          <path class="g-zone on" id="g-on"/>
+          <path class="g-zone off" id="g-off"/>
+          <line class="g-tick" id="g-tick"/>
+          <text class="g-th" id="g-th" text-anchor="middle"></text>
+          <text class="g-end on" x="22" y="118" text-anchor="middle">keeps going</text>
+          <text class="g-end off" x="178" y="118" text-anchor="middle">switches off</text>
+          <g id="g-needle" class="g-needle"><line x1="100" y1="100" x2="100" y2="30"/></g>
+          <circle class="g-hub" cx="100" cy="100" r="6"/>
+          <text class="g-value" id="g-value" text-anchor="middle"></text>
+        </svg>
+        <p class="g-say" id="g-say"></p>
+      </div>
+      <figcaption class="strip">
+        <div class="timeline" aria-hidden="true"><span class="tl-past"><i id="tl-past"></i></span><span class="tl-bet"></span><span class="tl-future"><i id="tl-future"></i></span></div>
+        <div class="chart-row">
+          <canvas id="chart" role="img" aria-label="Chart of the galaxy's star formation over time"></canvas>
+          <div class="chart-tabs" role="tablist" id="chart-tabs" aria-label="What the chart shows"></div>
+        </div>
+      </figcaption>
+    </figure>
+
+    <div class="console" aria-live="polite">
+      <div class="phase" data-phase="past">
+        <p class="say"><span id="past-text">Its past, up to the moment of your bet.</span></p>
+        <button class="btn quiet" id="replay-past">Watch again</button>
+      </div>
+      <div class="phase" data-phase="bet" hidden>
+        <p class="say">In the next billion years, will it stop making stars?</p>
+        <div class="bets">
+          <button class="btn off" data-guess="off">It switches off</button>
+          <button class="btn on" data-guess="on">It keeps going</button>
+        </div>
+        <button class="btn quiet" id="replay-past-2">Watch again</button>
+      </div>
+      <div class="phase" data-phase="thinking" hidden>
+        <p class="say">You bet <b class="your-bet"></b>. Now the model bets.</p>
+      </div>
+      <div class="phase" data-phase="ready" hidden>
+        <p class="say">You bet <b class="your-bet"></b>. The model has bet too, and keeps it sealed.</p>
+        <button class="btn primary" id="play-future">Show the future</button>
+      </div>
+      <div class="phase" data-phase="show" hidden>
+        <p class="say"><b id="show-title"></b><span class="show-story" id="show-story"></span></p>
+        <button class="btn quiet" id="show-leave">Back to the list</button>
+      </div>
+      <div class="phase" data-phase="show-end" hidden>
+        <p class="say"><b class="show-truth" id="show-truth"></b><span class="show-story" id="show-model"></span></p>
+        <div class="bets">
+          <button class="btn quiet" id="show-again">Watch again</button>
+          <button class="btn quiet" id="show-3d">See it in 3D</button>
+          <button class="btn primary" id="show-back">Back to the list</button>
+        </div>
+      </div>
+      <div class="phase" data-phase="future" hidden>
+        <p class="say">You bet <b class="your-bet"></b>.<span id="model-say"></span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- the verdict, back in the sky -->
+  <section class="rail screen" id="screen-verdict">
+    <div class="verdict-head">
+      <h2 class="truth" id="truth"></h2>
+      <ul class="bets-result">
+        <li id="r-you"></li>
+        <li id="r-model"></li>
+      </ul>
+      <p class="box-line" id="r-box"></p>
+    </div>
+    <!-- the next step: your galaxy, as its film left it, opens in 3D -->
+    <button class="see3d" id="go-3d">
+      <span class="see3d-galaxy" id="see3d-galaxy" aria-hidden="true"></span>
+      <span class="see3d-text"><span class="btn primary">See it in 3D</span><small>Turn it, zoom in and play it through time</small></span>
+    </button>
+    <div class="verdict-more">
+      <div class="actions">
+        <button class="btn" id="again">Play again</button>
+        <button class="btn quiet" id="rewatch">Watch the future again</button>
+      </div>
+      <button class="link-btn" id="go-showcase-2" hidden>Curious? Meet three remarkable galaxies</button>
+    </div>
+    <div class="legend" id="legend">
+      <span class="legend-bar" aria-hidden="true"></span>
+      <span class="legend-ticks" aria-hidden="true"><span>0 %</span><span>15 %</span><span>60 % +</span></span>
+      <span>Every galaxy is coloured by the model's chance that it switches off.</span>
+      <button class="legend-toggle" id="map-truth" aria-pressed="false">ring the ones that really switched off</button>
+    </div>
+  </section>
+
+  <!-- 3D -->
+  <!-- the 3D screen: the view on the right (drawn by viewer3d.js) with its time bar and layers, the column of text on the left -->
+  <section class="screen" id="screen-3d">
+    <div class="viewer" id="viewer">
+      <button class="icon-btn fs-3d" id="viewer-fs" aria-label="Show the 3D view full screen" title="Full screen">
+        <svg class="enter" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5"/></svg>
+        <svg class="exit" viewBox="0 0 20 20" aria-hidden="true"><path d="M8 3v5H3M17 8h-5V3M12 17v-5h5M3 12h5v5"/></svg>
+      </button>
+      <div class="viewer-bar">
+        <div class="time3d">
+          <button class="icon-btn play" id="t3-play" aria-label="Play the galaxy through time">
+            <svg class="i-play" viewBox="0 0 20 20" aria-hidden="true"><path d="M6.5 4.5v11l9-5.5z"/></svg>
+            <svg class="i-pause" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4.5v11M13 4.5v11"/></svg>
+          </button>
+          <div class="t3-track">
+            <canvas id="t3-curve" aria-hidden="true"></canvas>
+            <input type="range" class="scrub" id="t3-scrub" min="78" max="84" step="0.01" value="78" aria-label="Moment shown in 3D" aria-valuetext="3.50 billion years ago">
+          </div>
+          <p class="t3-when"><span><b id="t3-when">3.50</b> billion years ago</span><small id="t3-note">the moment of your bet</small></p>
+        </div>
+        <div class="viewer-row">
+          <div class="toggles" id="layers" role="group" aria-label="Show">
+            <button class="toggle" data-layer="stars" aria-pressed="true">stars</button>
+            <button class="toggle" data-layer="gas" aria-pressed="true">gas</button>
+            <button class="toggle" data-layer="bySf" aria-pressed="false">gas making stars</button>
+          </div>
+          <span class="viewer-detail" id="viewer-detail" aria-live="polite"></span>
+        </div>
+      </div>
+      <p class="viewer-status" id="viewer-status" hidden></p>
+    </div>
+    <div class="rail-3d">
+      <div class="r3-head">
+        <h2>The same galaxy in 3D</h2>
+        <p>Every dot is a real gas cell or star of the simulation. Drag to turn it, scroll or pinch to zoom, and play it through time.</p>
+      </div>
+      <!-- the galaxy at the moment shown in 3D: its numbers follow the time bar -->
+      <dl class="r3-now" id="r3-now">
+        <div><dt>billion suns of stars</dt><dd id="r3-stars">–</dd></div>
+        <div><dt>billion suns of gas</dt><dd id="r3-gas">–</dd></div>
+        <div><dt>suns of new stars a year</dt><dd id="r3-sfr">–</dd></div>
+      </dl>
+      <ul class="key3d" id="key3d" aria-label="What the colours show" data-stars="on" data-gas="plain">
+        <li class="k-stars"><i style="--c: 158, 191, 255"></i>young stars</li>
+        <li class="k-stars"><i style="--c: 255, 199, 128"></i>old stars</li>
+        <li class="k-gas"><i style="--c: 199, 107, 217"></i>gas</li>
+        <li class="k-sf"><i style="--c: 255, 170, 90"></i>gas making stars</li>
+        <li class="k-sf"><i style="--c: 64, 77, 140"></i>gas not making stars</li>
+      </ul>
+      <div class="actions"><button class="btn quiet" id="back-film">Back</button><button class="btn primary" id="again-3d">Play again</button></div>
+    </div>
+  </section>
+</main>
+
+<!-- the end of the future: a short black, then the verdict in large type -->
+<div class="finale" id="finale" hidden><p class="finale-word" id="finale-word" role="status"></p></div>
+
+<!-- "How this was made": the small link at the bottom left and the dialog it opens (some of its lines are filled in by game.js) -->
+<button class="made-link" id="made-link">How this was made</button>
+<dialog class="made" id="made" aria-labelledby="made-title">
+  <h2 id="made-title">How this was made</h2>
+  <p><b>The galaxies.</b> Every point of light is one of the 12,710 galaxies of the IllustrisTNG simulation (TNG100) that the model learned from, followed from about 4.4 to 2.5 billion years ago. Their places in the sky are their mass of stars (left to right) and their gas for each star (bottom to top).</p>
+  <p><b>The films.</b> Every image comes from the particles of the simulation, rendered for this page. The simulation saves its state only every 110 to 240 million years (160 on average), so<span id="made-except"></span> the frames in between are smooth blends of two real moments (the label says "blend"); nothing is invented between them. The slow camera turn is ours.</p>
+  <p id="made-motion" hidden><b>The new films.</b> <span></span></p>
+  <p><b>Which galaxy plays.</b> For each combination that exists in the simulation (32 of the 36) the film shows a typical real galaxy of that kind. Where more than 5 % of such galaxies switched off, a typical one of those plays as often as they really occur; otherwise a typical one that keeps forming stars plays.</p>
+  <p><b>The model.</b> The chance comes from a model that never saw this galaxy during training (cross-validation). It reads 17 numbers about the galaxy at the moment of your bet, not the images. It bets "switches off" when its chance is above <span id="made-threshold">32 %</span>.</p>
+  <p id="made-hero" hidden><b>The opening.</b> <span></span></p>
+  <p><b>The suspense.</b> During the future film the needle of the model's gauge swings for suspense; it stops on the model's real chance at the end. The last moments of the film are slowed down, except for the remarkable galaxies on the home page.</p>
+  <p><b>The 3D view.</b> <span id="made-3d">Its time bar shows moments the simulation really saved; no particle is moved or invented.</span> The camera's opening glide is ours; its distance is set from where the galaxy's stars are, so small and large galaxies fill the view alike.</p>
+  <p class="small">Data: IllustrisTNG project, TNG100-1, snapshots 72 to 84; your bet is placed 3.5 billion years ago.</p>
+  <form method="dialog"><button class="btn quiet">Close</button></form>
+</dialog>
+
+<!-- the scripts: game.js runs the game (it imports sky.js and charts.js, and viewer3d.js when the 3D screen opens);
+     sound.js plays the music, following the screen the page shows -->
+<script type="module" src="game.js"></script>
+<script src="sound.js" defer></script>
+</body>
+</html>

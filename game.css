@@ -1,0 +1,1016 @@
+/* Will it switch off? Direction "Data sky": the 12,710 real galaxies the model learned from are the
+   night sky of the game. One focal point per screen: the sky, then the film, then the sky again. */
+
+/* =====================================================================
+   Map of this file
+   =====================================================================
+   The project's code is split in numbered blocks: 1. DATA, 2. DATA PROCESSING, 3. RENDERING,
+   4. INTERFACE AND ANIMATIONS, 5. SOUND. This file is the look of the page, so it is almost all
+   block 4, with the sky's layers (block 3) near the top and the music button (block 5) at the end.
+   The sections follow one another in this order (never reorder them: in CSS a later rule wins
+   over an earlier one of the same weight, so the order is part of the design):
+
+     0.  BASE: colours, fonts and page defaults
+     3a. THE SKY: the canvas of galaxies, the cosmic web behind it, its two axes
+     4a. HEADER: the title link, the score, (the music button: see 5)
+     4b. SCREENS AND TRANSITIONS: which screen shows, the text column, the slide between screens
+     4c. THE OPENING AND THE HOME PAGE: the intro galaxy, the title, the three steps, Start
+     4d. BUTTONS: every kind of button, hover and press
+     4e. CHOOSING: the four questions, the answers, the rolling count
+     4f. THE FILM: player, labels, veil, strip and chart, console, gauge, finale
+     4g. REMARKABLE GALAXIES ON THE HOME PAGE: the three cards
+     4h. THREE REMARKABLE GALAXIES: the list and one galaxy's intro (meet)
+     4i. THE VERDICT: the result, the way into 3D, the sky's colour key
+     4j. THE 3D VIEW: its frame, time bar, controls and the column beside it
+     4k. HOW THIS WAS MADE: the link and the dialog
+     4l. PHONE AND NARROW SCREENS: the narrow layout, then less motion
+     5.  MUSIC BUTTON: the music button, its volume slider, the full-screen button beside it
+
+   Layers (z-index), from the back to the front:
+     0  the sky canvas and the cosmic web       1  the sky's axis words
+     2  main (the screens)                      3  a leaving screen's copy (.ghost), the film's veil
+     4  "How this was made", the film's full-screen button
+     10 the header                              45 the finale (black, then the verdict word)
+     50 a film or 3D view in full screen        60 the opening (above everything)
+
+   Two layouts: "narrow" is a portrait phone or tablet, or a very short window; the rule is
+     (max-width: 899px) and (max-aspect-ratio: 6/5), (max-height: 479px), (max-width: 1099px) and (max-height: 699px)
+   The wide layout (a computer) is written as  @media not ((that same test)), so the two never overlap.
+   The same test is in game.js (NARROW), which uses it to size the sky above the text on a phone. */
+
+/* =====================================================================
+   0. BASE: colours, fonts and page defaults
+   =====================================================================
+   The colours and fonts as variables (used everywhere below), then the plain defaults of the page. */
+
+:root {
+  --void: #03040b;
+  --deep: #0a0c18;
+  --star: #eef1ff;
+  --dim: #9aa0bb;          /* secondary text, 7:1 on the void */
+  --faint: #6c7290;        /* tertiary marks only, never body text */
+  --line: rgba(238, 241, 255, 0.14);
+  --quenched: #e0455a;
+  --forming: #5b8fd6;
+  --gold: #f2c46d;
+  --right: #8fd6a4;
+  --display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --text: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --title: "Doto", "Unbounded", monospace;   /* the title only: round dots, like a scoreboard */
+  --title-shade: #3d4156;                    /* its shadow, one dot down and right */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --rail-left: max(24px, 6vw);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { color-scheme: dark; background: var(--void); scrollbar-color: rgba(238, 241, 255, 0.2) var(--void); accent-color: var(--star); }
+body { margin: 0; min-height: 100vh; background: var(--void); color: var(--star); font: 400 17px/1.55 var(--text); overflow-x: hidden; }
+::selection { background: rgba(238, 241, 255, 0.28); }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+h1, h2, p { margin: 0; }
+button { font: inherit; color: inherit; }
+b { font-weight: 600; }
+
+/* =====================================================================
+   3a. THE SKY: the canvas of galaxies, the cosmic web behind it, its two axes
+   =====================================================================
+   The sky itself is drawn by sky.js on the canvas #sky (block 3); here I only place it, dim it on the
+   film and 3D screens, and style the faint picture of the cosmic web that sits behind it. */
+
+/* I pin the canvas to the window (layer 0) and fade it to 13 % while a film or the 3D view plays */
+#sky { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0; transition: opacity 0.9s var(--ease); }
+body[data-screen="film"] #sky, body[data-screen="3d"] #sky { opacity: 0.13; }
+
+/* Behind the sky: a faint gradient (a cool glow at the top right, a warm one at the bottom left) and the real cosmic
+   web of the simulation in amber (the gas of a 22 Mpc slice through the whole TNG100 box at snapshot 78, bg/), added in
+   screen mode at a low opacity and drifting very slowly on a computer. It dims with the sky on the film and 3D screens,
+   so it never competes with the text or the films. */
+.cosmos { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; transition: opacity 0.9s var(--ease);
+  background: radial-gradient(110% 80% at 82% 6%, rgba(72, 86, 138, 0.13), transparent 62%),
+              radial-gradient(90% 70% at 8% 104%, rgba(110, 64, 72, 0.08), transparent 64%); }
+.cosmos::before { content: ""; position: absolute; inset: -4%; background: url("bg/web-desktop-colour.jpg") center / cover no-repeat;
+  opacity: 0.16; mix-blend-mode: screen; animation: drift 140s ease-in-out infinite alternate; will-change: transform; }
+@keyframes drift { from { transform: translate3d(0, 0, 0) scale(1.02); } to { transform: translate3d(-2%, -1.2%, 0) scale(1.05); } }
+/* a little life in the filaments (on a computer): a second copy of the web, a little larger and drifting the other way,
+   fades in and out over 11 s, so the filaments seem to brighten and shift very slowly; only opacity and transform
+   move (cheap for the graphics card), and it holds still during the films and the 3D view */
+.cosmos::after { content: ""; position: absolute; inset: -6%; background: url("bg/web-desktop-colour.jpg") center / cover no-repeat;
+  opacity: 0; mix-blend-mode: screen; will-change: transform, opacity;
+  animation: drift-back 170s ease-in-out infinite alternate, filament-breath 11s ease-in-out infinite alternate; }
+@keyframes drift-back { from { transform: translate3d(-1.5%, -1%, 0) scale(1.07); } to { transform: translate3d(1%, 0.8%, 0) scale(1.04); } }
+@keyframes filament-breath { from { opacity: 0; } to { opacity: 0.09; } }
+body[data-screen="film"] .cosmos::after, body[data-screen="3d"] .cosmos::after { animation-play-state: paused; }
+body[data-screen="film"] .cosmos, body[data-screen="3d"] .cosmos { opacity: 0.35; }
+body.intro-on .cosmos { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .cosmos::before, .cosmos::after { animation: none; } }
+/* On a computer, bands of light travel without a break across the filaments, left to right, one every 60 % of the
+   screen's width every 16 s. A brighter copy of the web is shown only where a band passes (the band multiplies it,
+   inside its own group, then the group lightens the page), much less behind the text column and softer under the
+   galaxy cloud. Only transform moves, so the graphics card does the work. Hidden during the films and the 3D view;
+   none on a phone or with reduced motion. */
+.cosmos-light { position: absolute; inset: -4%; isolation: isolate; mix-blend-mode: screen;
+  background: url("bg/web-desktop-colour.jpg") center / cover no-repeat; filter: brightness(1.9) saturate(1.15);
+  opacity: 0.75; transition: opacity 0.9s var(--ease); }
+/* the band is a stripe pattern 60vw wide (black, white in the middle, black) that I slide by exactly 60vw, so the loop has no jump */
+.cosmos-band { position: absolute; top: -10%; bottom: -10%; left: 0; width: calc(100% + 60vw); mix-blend-mode: multiply;
+  background: repeating-linear-gradient(100deg, #000 0, #000 16vw, #fff 30vw, #000 44vw, #000 60vw);
+  animation: band-travel 16s linear infinite; will-change: transform; }
+@keyframes band-travel { from { transform: translateX(-60vw); } to { transform: translateX(0); } }
+.cosmos-light::after { content: ""; position: absolute; inset: 0;   /* softer behind the text column, and under the galaxy cloud */
+  /* the cloud's patch follows the map's own rectangle (--fl/--fr/--ft/--fb, set by the sky); this layer starts 4 % outside the window */
+  --cw: calc(var(--fr, 96.5vw) - var(--fl, 40vw)); --ch: calc(var(--fb, 90vh) - var(--ft, 12vh));
+  background: radial-gradient(ellipse calc(var(--cw) * 0.57) calc(var(--ch) * 0.55)
+      at calc(var(--fl, 40vw) + var(--cw) * 0.33 + 4vw) calc(var(--ft, 12vh) + var(--ch) * 0.38 + 4vh),
+      rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.45) 55%, transparent 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.72) 34%, transparent 46%); }
+body[data-screen="film"] .cosmos-light, body[data-screen="3d"] .cosmos-light { opacity: 0; }
+body[data-screen="film"] .cosmos-band, body[data-screen="3d"] .cosmos-band { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .cosmos-light { display: none; } }
+
+/* the sky's two axes: small near-white words at the ends of the faint axis lines, no arrows.
+   --fl, --fr, --ft, --fb are the left, right, top and bottom edges of the map, set by sky.js;
+   the values after the comma are only fallbacks until it has set them */
+.axis { position: fixed; z-index: 1; font-size: 12.5px; color: rgba(238, 241, 255, 0.84); pointer-events: none; transition: opacity 0.6s;
+  text-shadow: 0 0 6px rgba(3, 4, 11, 0.95), 0 1px 2px rgba(3, 4, 11, 0.95); white-space: nowrap; }
+.axis-x { right: calc(100vw - var(--fr, 97vw)); top: calc(var(--fb, 90vh) + 16px); }
+.axis-y { left: calc(var(--fl, 40vw) - 10px); top: calc(var(--ft, 12vh) - 26px); }
+/* on the home page, above the map's right end: how many of the game's galaxies you have met */
+.axis-found { right: calc(100vw - var(--fr, 97vw)); top: calc(var(--ft, 12vh) - 26px); color: var(--dim); }
+.axis-found b { color: var(--star); font-weight: 600; }
+body:not([data-screen="home"]) .axis-found { opacity: 0; }
+body[data-screen="film"] .axis, body[data-screen="3d"] .axis { opacity: 0; }
+
+/* =====================================================================
+   4a. HEADER: the title link, the score
+   =====================================================================
+   The thin bar across the top of every screen: the small title (back to the start) on the left, the
+   score in the middle, the music and full-screen buttons on the right (their look is in section 5). */
+
+/* layer 10, above the screens; the bar itself lets clicks through, only its children catch them */
+.top { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center;
+  column-gap: 12px; padding: 22px var(--rail-left) 0; pointer-events: none; }
+.top > * { pointer-events: auto; }
+.wordmark { background: none; border: 0; padding: 4px 0; cursor: pointer; font: 900 20px var(--title); font-variation-settings: "ROND" 100; white-space: nowrap;
+  color: var(--star); text-shadow: 0.1em 0.1em 0 var(--title-shade); transition: opacity 0.4s; }
+body[data-screen="home"] .wordmark { opacity: 0; pointer-events: none; }
+.score { font-size: 14px; color: var(--dim); font-variant-numeric: tabular-nums; transition: opacity 0.6s; }
+body[data-rounds="0"] .score { opacity: 0; }
+.score b { color: var(--star); display: inline-block; margin-left: 4px; }
+.score .of { color: var(--faint); }
+.score .gap { display: inline-block; width: 18px; }
+.score .bump { animation: bump 1.2s var(--ease); color: var(--gold); }
+@keyframes bump { 0% { transform: scale(1); } 15% { transform: scale(1.6); } 100% { transform: scale(1); } }
+
+/* =====================================================================
+   4b. SCREENS AND TRANSITIONS: which screen shows, the text column, the slide between screens
+   =====================================================================
+   game.js writes the current screen in <body data-screen="...">; only the matching <section> is shown.
+   Then the left column of text (the rail), the slide when you change screens, and the home column. */
+
+main { position: relative; z-index: 2; display: flow-root; }   /* flow-root: the text's top margin stays inside (no empty band to scroll into below it) */
+.screen { display: none; }
+body[data-screen="home"] #screen-home,
+body[data-screen="choose"] #screen-choose,
+body[data-screen="film"] #screen-film,
+body[data-screen="verdict"] #screen-verdict,
+body[data-screen="3d"] #screen-3d,
+body[data-screen="showcase"] #screen-showcase,
+body[data-screen="meet"] #screen-meet { display: block; }
+
+/* the rail: the left column of text over the dark part of the sky */
+.rail { position: fixed; left: var(--rail-left); bottom: 10vh; width: min(33vw, 480px); animation: enter-forward 0.4s 0.08s var(--ease) both; }
+/* changing screens: the screen you leave (a copy of it, see leaveScreen in game.js) slides a little the way you go and
+   fades in 150 ms; the next one comes in from the other side in 400 ms: from the right going forward, from the left
+   coming back. Both stay clickable all along (the copy lets clicks through). */
+body[data-dir="back"] .rail, body[data-dir="back"] .rail-3d { animation-name: enter-back; }
+@keyframes enter-forward { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+@keyframes enter-back { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
+/* !important: the copy must use the leaving animation, whatever animation its own classes give it */
+.ghost { pointer-events: none; z-index: 3; animation: leave-forward 0.15s ease-in both !important; }
+.ghost.back { animation-name: leave-back !important; }
+.ghost * { animation: none !important; transition: none !important; }
+.ghost, .ghost * { view-transition-name: none !important; }   /* a leaving copy never takes part in a card's morph */
+@keyframes leave-forward { to { opacity: 0; transform: translateX(-18px); } }
+@keyframes leave-back { to { opacity: 0; transform: translateX(18px); } }
+#screen-home { width: min(calc(40vw - var(--rail-left) - 28px), 560px); }   /* stops before the sky starts (40vw) */
+/* on a computer the home column runs from near the top (the credit line, then the title) down to the cards at its foot,
+   a little closer to the left edge than the other screens; the sky beside it does not move.
+   "@media not ((narrow))": the wide layout, the exact opposite of the narrow one in section 4l (see the map at the top) */
+@media not (((max-width: 899px) and (max-aspect-ratio: 6/5)) or (max-height: 479px) or ((max-width: 1099px) and (max-height: 699px))) {
+  :root { --home-left: max(20px, 3.5vw); }
+  #screen-home { left: var(--home-left); top: clamp(24px, 4vh, 44px); bottom: max(56px, 7.5vh); width: min(calc(40vw - var(--home-left) - 28px), 560px); }
+  body[data-screen="home"] #screen-home { display: flex; flex-direction: column; }
+  #screen-home .home-cards { margin-top: auto; padding-top: 16px; }
+  body[data-screen="home"] .made-link { left: var(--home-left); }
+  .credit-line { white-space: nowrap; }      /* one line, running on past the column over the empty top of the sky */
+  /* a remarkable galaxy's intro, in the home column: its name where the title of the home page stands */
+  #screen-meet { left: var(--home-left); top: calc(clamp(24px, 4vh, 44px) + 18px + clamp(12px, 2.6vh, 28px)); bottom: auto;
+    width: min(calc(40vw - var(--home-left) - 28px), 560px); }
+}
+
+/* the credit line above the title: who made the images, and from what */
+.credit-line { font-size: 12.5px; line-height: 1.45; color: var(--dim); margin-bottom: clamp(12px, 2.6vh, 28px); }
+
+/* =====================================================================
+   4c. THE OPENING AND THE HOME PAGE: the intro galaxy, the title, the three steps, Start
+   =====================================================================
+   The opening (first visit only): one real galaxy, large, that shrinks into its point in the sky
+   (moved by game.js). Then the home page's own text: the beating title, the three steps of a round,
+   the Start button, and the text styles the other screens share (h2, lede, actions). */
+
+/* layer 60: the opening covers everything, and a click anywhere skips it */
+.intro { position: fixed; inset: 0; z-index: 60; cursor: pointer; }
+.intro-galaxy { position: absolute; left: 0; top: 0; width: var(--size, 600px); height: var(--size, 600px); border-radius: 50%; overflow: hidden;
+  will-change: transform, opacity; -webkit-mask-image: radial-gradient(circle, #000 38%, transparent 70%); mask-image: radial-gradient(circle, #000 38%, transparent 70%); }
+.intro-galaxy > * { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* what the picture is: small, while it is large, gone before it reaches the sky */
+.intro-caption { position: absolute; left: 16px; right: 16px; bottom: calc(4vh + 30px); max-width: 62ch; margin: 0 auto; text-align: center;
+  font-size: 12px; line-height: 1.45; color: var(--dim); text-wrap: balance; animation: caption 4.6s 0.5s var(--ease) both; }
+@keyframes caption { from { opacity: 0; } 18% { opacity: 1; } 72% { opacity: 1; } to { opacity: 0; } }
+.intro-skip { position: absolute; left: 0; right: 0; bottom: 4vh; text-align: center; font-size: 13px; color: var(--faint); animation: rise 1s 1.2s var(--ease) both; }
+/* while the opening plays (body.intro-on, set before the first paint by the script in index.html) the page waits
+   hidden; once it is done (body.intro-done) the text column rises in */
+body.intro-on #sky { opacity: 0; }
+body.intro-on .top, body.intro-on main, body.intro-on .made-link { opacity: 0; pointer-events: none; }
+body.intro-done main .rail { animation: rise 0.9s var(--ease) both; }
+.top, main, .made-link { transition: opacity 0.8s var(--ease); }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* ---- the title and the home page's text */
+
+/* the title in round dots, white on the black sky, its shadow one dot (0.1em) down and right;
+   "ROND" 100 is the Doto font's setting for fully round dots */
+h1 { font: 800 clamp(48px, min(7vw, 11vh), 100px)/1 var(--title); font-variation-settings: "ROND" 100; color: var(--star);
+  text-shadow: 0.1em 0.1em 0 var(--title-shade); margin-bottom: 24px; text-wrap: balance; }
+/* on the home page the title is larger and beats like an arcade title screen: about once a second it jumps 4 % bigger,
+   its dots flash brighter in a surge of glow, then it settles back (under one beat a second: punchy, never a strobe) */
+#screen-home h1 { font-size: clamp(48px, min(7.6vw, 12vh), 116px); line-height: 0.92; margin-bottom: 20px;
+  transform-origin: 0 60%; animation: beat 1.1s infinite; }
+@keyframes beat {
+  0% { transform: scale(1); filter: brightness(1); text-shadow: 0.1em 0.1em 0 var(--title-shade), 0 0 0.02em rgba(238, 241, 255, 0); animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1); }
+  6% { transform: scale(1.04); filter: brightness(1.35); text-shadow: 0.1em 0.1em 0 var(--title-shade), 0 0 0.2em rgba(238, 241, 255, 0.8); animation-timing-function: cubic-bezier(0.3, 0, 0.4, 1); }
+  24% { transform: scale(1.014); filter: brightness(1.08); text-shadow: 0.1em 0.1em 0 var(--title-shade), 0 0 0.1em rgba(238, 241, 255, 0.35); }
+  62%, 100% { transform: scale(1); filter: brightness(1); text-shadow: 0.1em 0.1em 0 var(--title-shade), 0 0 0.02em rgba(238, 241, 255, 0); }
+}
+@media (prefers-reduced-motion: reduce) { #screen-home h1 { animation: none; } }
+
+/* the three steps of a round, each in its colour of the game: picking in the sky's blue, the film in amber, the bet in
+   the switched-off red, joined by short lines that pass from one colour to the next */
+.round-steps { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; row-gap: 8px; }
+.rs { display: flex; align-items: center; gap: 7px; }
+.rs + .rs::before { content: ""; flex: none; width: 14px; height: 1.5px; margin: 0 6px; border-radius: 1px; opacity: 0.8; }
+.rs-grow::before { background: linear-gradient(90deg, var(--forming), var(--gold)); }
+.rs-bet::before { background: linear-gradient(90deg, var(--gold), var(--quenched)); }
+.rs-icon { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  border: 1.5px solid currentColor; box-shadow: 0 0 14px -4px currentColor; }
+.rs-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rs-icon .fill { fill: currentColor; stroke: none; }
+.rs-say { font: 600 14px/1.25 var(--text); white-space: nowrap; }
+.rs-pick { color: var(--forming); }
+.rs-grow { color: var(--gold); }
+.rs-bet { color: var(--quenched); }
+
+/* Start, on its own in the middle of the column: amber like the cosmic web behind, beating softly with the title (the same
+   1.1 s beat: 2.5 % bigger and a surge of its glow). Under the pointer the beat gives way to the hover zoom (the beat
+   keeps running unseen, so it stays in step with the title). */
+#screen-home .actions { justify-content: center; margin-top: clamp(18px, 3.4vh, 34px); }
+#go-choose { font-size: 18px; padding: 17px 54px; background: var(--gold); border-color: var(--gold); color: var(--void);
+  box-shadow: 0 0 0 1px var(--gold), 0 6px 26px rgba(242, 196, 109, 0.2); animation: start-beat 1.1s infinite; }
+#go-choose:hover { background: #f8d68e; border-color: #f8d68e; transform: none !important;
+  box-shadow: 0 0 0 1px #f8d68e, 0 8px 36px rgba(242, 196, 109, 0.45) !important; }
+@keyframes start-beat {
+  0% { transform: scale(1); box-shadow: 0 0 0 1px var(--gold), 0 6px 26px rgba(242, 196, 109, 0.2); animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1); }
+  6% { transform: scale(1.025); box-shadow: 0 0 0 1px var(--gold), 0 0 38px rgba(242, 196, 109, 0.55); animation-timing-function: cubic-bezier(0.3, 0, 0.4, 1); }
+  24% { transform: scale(1.008); box-shadow: 0 0 0 1px var(--gold), 0 4px 30px rgba(242, 196, 109, 0.32); }
+  62%, 100% { transform: scale(1); box-shadow: 0 0 0 1px var(--gold), 0 6px 26px rgba(242, 196, 109, 0.2); }
+}
+@media (prefers-reduced-motion: reduce) { #go-choose { animation: none; } }
+
+/* ---- text shared by every screen: the headings, the grey lead paragraph, the row of buttons */
+h2 { font: 300 clamp(26px, 2.5vw, 36px)/1.15 var(--display); letter-spacing: -0.02em; text-wrap: balance; }
+.lede { color: var(--dim); max-width: 42ch; margin-bottom: 12px; }
+.lede em { font-style: normal; color: var(--star); }
+.lede b { color: var(--star); }
+.small { font-size: 14px; color: var(--dim); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+
+/* =====================================================================
+   4d. BUTTONS: every kind of button, hover and press
+   =====================================================================
+   The round buttons of the whole game: plain (.btn), white (.primary), text-only (.quiet), and the two
+   bets in the game's colours (.off red, .on blue); then how buttons, cards and answers react to the pointer. */
+
+.btn { cursor: pointer; font: 600 16px/1 var(--text); border-radius: 999px; padding: 14px 24px; border: 1px solid var(--line); background: transparent; color: var(--star);
+  transition: background 0.25s, border-color 0.25s, box-shadow 0.3s, scale 0.25s var(--ease), opacity 0.2s; }
+.btn:hover { border-color: rgba(238, 241, 255, 0.5); background: rgba(238, 241, 255, 0.06); }
+.btn.primary:hover { background: #fff; box-shadow: 0 0 0 1px #fff, 0 8px 34px rgba(238, 241, 255, 0.3); }
+/* hover and press: a slight zoom under the pointer (a computer), a press-in on click or tap; the scale property, so a
+   card's entrance animation (which owns transform) does not hide it */
+@media (hover: hover) {
+  .btn:not(:disabled):hover, .card:not(.soon):hover, .icon-btn:hover, .sound:hover { scale: 1.04; }
+  .option:hover, .showcase-list button:hover { scale: 1.02; }
+}
+.btn:not(:disabled):active, .card:not(.soon):active, .icon-btn:active, .sound:active, .option:active, .showcase-list button:active { scale: 0.97; transition-duration: 0.08s; }
+.icon-btn { transition: scale 0.25s var(--ease); }
+.btn:disabled { opacity: 0.35; cursor: default; }
+.btn.primary { background: var(--star); color: var(--void); border-color: var(--star); }
+.btn.primary:hover { background: #fff; }
+.btn.quiet { border-color: transparent; color: var(--dim); padding-left: 14px; padding-right: 14px; }
+.btn.quiet:hover { color: var(--star); border-color: var(--line); }
+.btn.off { background: var(--quenched); border-color: var(--quenched); color: var(--void); }
+.btn.on { background: var(--forming); border-color: var(--forming); color: var(--void); }
+.btn.off:hover, .btn.on:hover { filter: brightness(1.08); }
+
+/* =====================================================================
+   4e. CHOOSING: the four questions, the answers, the rolling count
+   =====================================================================
+   One question at a time (size, gas, black hole, place), the answers you have given as small pills,
+   and the count of galaxies that still fit. On a computer the questions become stops on a line. */
+
+.steps { list-style: none; padding: 0; margin: 0 0 22px; display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px; align-items: center; }
+.steps li { display: contents; }
+.steps button { cursor: pointer; font-size: 13px; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); background: rgba(3, 4, 11, 0.6); color: var(--dim); }
+.steps button:hover { color: var(--star); border-color: rgba(238, 241, 255, 0.4); }
+.steps button[aria-current="step"] { color: var(--star); border-color: rgba(238, 241, 255, 0.5); }
+.steps .todo { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); opacity: 0.6; margin: 0 4px; }
+.steps .topic, .steps .word { display: none; }      /* the words of the wider screen's stops */
+.steps-next { display: none; }                      /* the stops after the open question: wider screen only */
+
+/* the question and, right beside it, how many galaxies fit the answers so far */
+.q-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px 18px; margin-bottom: 22px; }
+.q-head h2 { flex: 1 1 10em; min-width: 0; }
+.question:not([hidden]) h2, .question:not([hidden]) > .options { animation: rise 0.5s var(--ease) both; }
+.options { display: flex; flex-wrap: wrap; gap: 10px; }
+/* three answers in a narrow column: one per line, the words of each answer in a second column (no lone
+   card on a row of its own) */
+#screen-choose { container-type: inline-size; }
+@container (max-width: 440px) {
+  .options:has(> :nth-child(3)) { flex-direction: column; }
+  .options:has(> :nth-child(3)) > .option { flex: none; display: grid; grid-template-columns: 4.6em 1fr; column-gap: 10px; align-items: baseline; padding: 12px 16px; }
+  .options:has(> :nth-child(3)) > .option small { margin-top: 0; }
+}
+.option { flex: 1 1 130px; cursor: pointer; text-align: left; padding: 14px 16px; border-radius: 16px; font: 600 17px/1.3 var(--text);
+  background: rgba(3, 4, 11, 0.55); border: 1px solid var(--line); color: var(--star); backdrop-filter: blur(3px);
+  transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.2s var(--ease), scale 0.25s var(--ease); }
+.option small { display: block; margin-top: 5px; font: 400 13.5px/1.35 var(--text); color: var(--dim); }
+.option:hover { border-color: rgba(238, 241, 255, 0.45); }
+.option[aria-pressed="true"] { background: var(--star); color: var(--void); border-color: var(--star); }
+.option[aria-pressed="true"] small { color: rgba(3, 4, 11, 0.72); }
+.option.unavailable:not([aria-pressed="true"]) { opacity: 0.42; border-style: dashed; cursor: not-allowed; transform: none; }
+/* answers that lead only to galaxies already met: muted, with a small caption; answers that lead to new
+   ones stand a little forward. Nothing is blocked. */
+.option.met:not([aria-pressed="true"]):not(.unavailable) { color: var(--dim); background: rgba(3, 4, 11, 0.4); border-color: rgba(238, 241, 255, 0.08); }
+.option.met:not([aria-pressed="true"]):not(.unavailable) small::after { content: "already met"; display: block; margin-top: 4px; font-size: 12px; color: var(--gold); opacity: 0.8; }
+.option.fresh:not([aria-pressed="true"]):not(.unavailable) { border-color: rgba(238, 241, 255, 0.32); transform: scale(1.03);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(238, 241, 255, 0.06), 0 0 22px rgba(238, 241, 255, 0.07); }
+.option.fresh:not([aria-pressed="true"]):not(.unavailable):hover { transform: scale(1.03) translateY(-1px); }
+#met-note { margin-top: 14px; font-size: 15.5px; color: var(--gold); }   /* by id: the answers that lead to met galaxies carry a class "met" too */
+
+/* the count: big digits on reels that roll down as a choice narrows the sky, its words under them */
+.count { flex: none; display: flex; flex-direction: column; align-items: flex-end; text-align: right; color: var(--dim); font-size: 13px; line-height: 1.3; }
+.count #count-text { margin-top: 5px; }
+.odo { display: inline-flex; height: 1em; overflow: hidden; font: 300 34px/1 var(--display); letter-spacing: -0.02em; color: var(--star);
+  font-variant-numeric: tabular-nums; }
+.odo-d, .odo-c { display: inline-block; height: 1em; overflow: hidden; transition: max-width 0.4s var(--ease), opacity 0.4s var(--ease); }
+.odo-d { width: var(--dw, 0.75em); max-width: var(--dw, 0.75em); text-align: center; }
+.odo-c { max-width: 0.4em; }
+.odo-d.odo-out, .odo-c.odo-out { max-width: 0; opacity: 0; }
+.odo-reel { display: block; }
+.odo-reel i { display: block; height: 1em; font-style: normal; }
+/* once the four answers are given: the count goes down above the button, as it always was there */
+.count-end .count { flex-direction: row; align-items: baseline; gap: 0 6px; flex-wrap: wrap; text-align: left; font-size: 15px; }
+.count-end .count #count-text { margin-top: 0; }
+#screen-choose .count-end .odo { font-size: 30px; }
+.count-end { margin-top: 26px; }
+#screen-choose:not(.complete) :is(.count-end, #box-note, #met-note, .actions) { display: none; }
+/* .sr-only: text for screen readers only (1 pixel, clipped), so the count is read aloud without being shown twice */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* "galaxy-count" is the name game.js gives the count box for one view transition, when the last answer
+   moves the count from beside the question to above the button: it glides there in 0.5 s */
+::view-transition-group(galaxy-count) { animation-duration: 0.5s; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+/* a choice: the answer lights at once, with a short press and a ring of light */
+.option.chosen { animation: chosen 0.42s var(--ease); }
+@keyframes chosen { 0% { scale: 0.95; box-shadow: 0 0 0 0 rgba(238, 241, 255, 0.55); } 45% { scale: 1.03; }
+  100% { scale: 1; box-shadow: 0 0 0 12px rgba(238, 241, 255, 0); } }
+.note { margin-top: 12px; font-size: 14.5px; color: var(--gold); max-width: 44ch; }
+
+/* a wider screen (the opposite of the narrow layout below): the four questions are stops on a line beside
+   the sky, from its top edge (12vh) down to its baseline (90vh). The free height is shared between the
+   stops, so the column is full at any height and the open question sits at its own stop. */
+@media not (((max-width: 899px) and (max-aspect-ratio: 6/5)) or (max-height: 479px) or ((max-width: 1099px) and (max-height: 699px))) {
+  body[data-screen="choose"] #screen-choose { display: flex; flex-direction: column; }
+  /* absolute, not fixed: in the rare case the answers outgrow a short window, the page scrolls to them */
+  #screen-choose { position: absolute; top: 12vh; bottom: auto; min-height: 78vh; width: min(calc(40vw - var(--rail-left) - 28px), 560px);
+    --qs: clamp(26px, min(2.5vw, 4.4vh), 44px); --mx: -26px; --gap: 18px; }
+  /* --qs: the question's font size; --mx: where the line runs, 26 px left of the text; --gap: space under each stop */
+  /* display: contents lets the stops join the column's own flex, so "order" can put each one in its place */
+  #screen-choose .steps { display: contents; }
+  #screen-choose [data-key="size"] { order: 1; }
+  #screen-choose [data-key="gas"] { order: 2; }
+  #screen-choose [data-key="wind"] { order: 3; }
+  #screen-choose [data-key="place"] { order: 4; }
+  #screen-choose .count-end { order: 5; margin-top: 0; }
+  #screen-choose .odo { font-size: var(--qs); }
+  #screen-choose .note { order: 6; }
+  #screen-choose #met-note { order: 7; }
+  #screen-choose .actions { order: 8; margin-top: 22px; }
+  #screen-choose .actions:not(:has(:not([hidden]))) { display: none; }   /* no button yet: the count sits on the sky's baseline */
+  /* each stop takes an equal share of the free height; the line runs through the stops, in the margin */
+  #screen-choose .steps li, #screen-choose .question { flex: 1 0 auto; position: relative; padding-bottom: var(--gap); }
+  #screen-choose .steps li { display: flex; --mid: 15px; }
+  #screen-choose .steps li.now, #screen-choose .steps li.later { display: none; }   /* later stops: drawn from the second list, after the question */
+  /* --mid: the height of a stop's point, the middle of its first line (0.575 of the question's size) */
+  #screen-choose .question { --mid: calc(var(--qs) * 0.575); }
+  #screen-choose .question h2 { font-size: var(--qs); }
+  #screen-choose .steps li::before, #screen-choose .question::before { content: ""; position: absolute; left: var(--mx); top: 0; bottom: 0; width: 1px; background: var(--line); }
+  #screen-choose [data-key="size"]::before { top: var(--mid); }
+  #screen-choose [data-key="place"]::before { bottom: auto; height: var(--mid); }
+  /* the stops are points of light like the sky's: an answer given, the open question (brighter), one to come (faint) */
+  #screen-choose .steps li::after, #screen-choose .question::after { content: ""; position: absolute; left: calc(var(--mx) - 3px); top: calc(var(--mid) - 3.5px);
+    width: 7px; height: 7px; border-radius: 50%; background: var(--star); box-shadow: 0 0 8px rgba(238, 241, 255, 0.5); }
+  #screen-choose .steps li:not(.done)::after { left: calc(var(--mx) - 2px); top: calc(var(--mid) - 2.5px); width: 5px; height: 5px; background: var(--faint); box-shadow: none; }
+  #screen-choose .question::after { left: calc(var(--mx) - 4.5px); top: calc(var(--mid) - 5px); width: 10px; height: 10px;
+    box-shadow: 0 0 0 5px rgba(238, 241, 255, 0.1), 0 0 18px rgba(238, 241, 255, 0.65); }
+  #screen-choose .steps button, #screen-choose .steps .todo { display: flex; align-items: baseline; padding: 4px 0; font-size: 15px; line-height: 22px; }
+  #screen-choose .steps button { border: 0; border-radius: 6px; background: none; color: var(--star); text-align: left; }
+  #screen-choose .steps .todo { width: auto; height: auto; margin: 0; border-radius: 0; background: none; opacity: 1; }
+  #screen-choose .steps .topic { display: inline-block; width: 7.4em; flex: none; color: var(--dim); }
+  #screen-choose .steps .pill { display: none; }
+  #screen-choose .steps .word { display: inline; }
+  #screen-choose .steps button:hover .topic { color: var(--star); }
+  #screen-choose .steps button:hover .word { text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 5px; }
+  /* a short laptop window: tighter steps, and the "How this was made" link (also on the home page) leaves this screen */
+  @media (max-height: 759px) {
+    #screen-choose { --gap: 10px; }
+    #screen-choose .q-head { margin-bottom: 14px; }
+    #screen-choose .actions { margin-top: 14px; }
+    body[data-screen="choose"] .made-link { display: none; }
+  }
+}
+
+/* =====================================================================
+   4f. THE FILM: player, labels, veil, strip and chart, console, gauge, finale
+   =====================================================================
+   The film screen: the video (block 3 made it, game.js plays it) with the page's labels over it, the
+   veil while the model thinks, the time line and live chart under it, the console with the bet,
+   the model's gauge, the slow-down of the last moments and the black finale with the verdict word. */
+
+#screen-film { min-height: 100vh; padding: 70px 16px 28px; }
+/* the film is 16:9; I keep 380 px of the window's height for the header, the strip and the console, and make
+   the film as wide as the rest allows (at most 84 % of the width). The zooms start from the galaxy's point in
+   the sky: game.js sets --from-x and --from-y */
+.stage { margin: 0 auto; width: min(84vw, calc((100vh - 380px) * 16 / 9)); min-width: min(100%, 560px); transform-origin: center; }
+.stage.zoom-in { animation: zoom-in 0.6s var(--ease) both; }
+@keyframes zoom-in { from { opacity: 0; transform: translate(var(--from-x, 0), var(--from-y, 0)) scale(0.04); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; } }
+.stage.zoom-out { animation: zoom-out 0.5s var(--ease) both; }
+@keyframes zoom-out { to { opacity: 0; transform: translate(var(--from-x, 0), var(--from-y, 0)) scale(0.04); filter: blur(4px); } }
+
+.film { position: relative; aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; background: #000;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(238, 241, 255, 0.08); }
+.film > video:first-child { width: 100%; height: 100%; display: block; object-fit: contain; }
+/* a remarkable galaxy's future, waiting under its past to take its place (no hold, no reload at the cut) */
+.film { isolation: isolate; }        /* its own stack of layers, so z-index -1 stays inside the film box */
+.film > video.film-next { z-index: -1; }
+.film > video.film-next:not(.stars-inset) { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: contain; }
+.film:fullscreen { border-radius: 0; box-shadow: none; }
+
+/* labels drawn by the page over the clean film */
+.labels { position: absolute; inset: 0; pointer-events: none; font-size: 14px; color: rgba(238, 241, 255, 0.92); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9); }
+.film:not(.clean) .labels { display: none; }
+.labels .when { position: absolute; left: 3%; top: 4.5%; font-size: clamp(13px, 1.25vw, 17px); font-variant-numeric: tabular-nums; }
+.labels .when small { display: block; color: var(--dim); font-size: 0.8em; min-height: 1.3em; }
+.labels .stats { position: absolute; left: 3%; bottom: 5%; display: grid; gap: 2px; font-size: clamp(12px, 1.1vw, 15px); font-variant-numeric: tabular-nums; }
+.labels .scale { position: absolute; left: 3%; bottom: calc(5% + 4.4em); display: grid; gap: 4px; font-size: 12px; color: var(--dim); }
+.labels .scale i { display: block; height: 2px; background: rgba(238, 241, 255, 0.8); border-radius: 1px; }
+.stars-inset { position: absolute; right: 2.5%; bottom: 5%; width: 19%; aspect-ratio: 1; object-fit: cover; border-radius: 10px;
+  box-shadow: 0 0 0 1px rgba(238, 241, 255, 0.22), 0 10px 30px rgba(0, 0, 0, 0.6); background: #000; }
+/* the word "stars" just above the box: the box is 19 % of the film's width and square, so its height is
+   19 % x 16/9 of the film's height (a % in "bottom" counts in heights) */
+.labels .stars-label { position: absolute; right: 2.5%; bottom: calc(5% + 19% * 16 / 9 + 6px); width: 19%; text-align: center; font-size: 12px; color: var(--dim); }
+/* films of the "motion" style: the stars box where their burnt-in film puts it, --inset pixels square in the
+   1920 x 1080 frame (540, half its height, unless the galaxy says otherwise), 36 px from the bottom right corner */
+.film.inset-big { --inset: 540; }
+.film.inset-big .stars-inset { right: calc(36 / 1920 * 100%); bottom: calc(36 / 1080 * 100%); width: calc(var(--inset) / 1920 * 100%); border-radius: 8px; }
+.film.inset-big .labels .stars-label { right: calc(36 / 1920 * 100%); bottom: calc((36 + var(--inset)) / 1080 * 100% + 6px); width: calc(var(--inset) / 1920 * 100%); }
+
+/* the veil over the film while the model thinks */
+.veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(3, 4, 11, 0); pointer-events: none;
+  transition: background 0.6s var(--ease), backdrop-filter 0.6s; }
+.veil.on { z-index: 3; background: rgba(3, 4, 11, 0.8); backdrop-filter: blur(3px); }
+.film[data-state="missing"] .veil.on { background: var(--void); }
+.thinking { text-align: center; padding: 24px; }
+.thinking-head { color: var(--dim); font-size: 15px; }
+.thinking-item { font: 300 clamp(22px, 2.6vw, 34px)/1.25 var(--display); letter-spacing: -0.02em; margin: 16px 0 22px; min-height: 2.5em; display: grid; place-items: center; }
+.thinking-item span { animation: rise 0.35s var(--ease) both; }
+.thinking-dots { list-style: none; padding: 0; margin: 0 auto; display: flex; gap: 7px; justify-content: center; }
+.thinking-dots li { width: 7px; height: 7px; border-radius: 50%; background: rgba(238, 241, 255, 0.16); transition: background 0.3s; }
+.thinking-dots li.read { background: var(--star); }
+.thinking-foot { margin-top: 18px; font-size: 13px; color: var(--faint); }
+
+/* the film's status: a spinner while it loads, a message (and a way on) if it is missing */
+.film-status { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding: 24px; text-align: center; font-size: 15px; color: var(--dim); background: rgba(3, 4, 11, 0.86);
+  opacity: 0; pointer-events: none; transition: opacity 0.4s var(--ease); }
+.film[data-state="loading"] .film-status, .film[data-state="missing"] .film-status { opacity: 1; pointer-events: auto; }
+.film[data-state="missing"] .spinner { display: none; }
+#film-status-text { max-width: 46ch; }
+.spinner { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(238, 241, 255, 0.12); border-top-color: var(--star); animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* the small square icon buttons (full screen), and the film's one in its top right corner: hidden until the
+   pointer is over the film, always a little visible on a touch screen (no hover there) */
+.icon-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; cursor: pointer; border-radius: 10px;
+  background: rgba(3, 4, 11, 0.55); border: 1px solid var(--line); color: var(--star); }
+.icon-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.fs { position: absolute; right: 2%; top: 3.5%; opacity: 0; transition: opacity 0.25s; z-index: 4; }
+.fs .exit { display: none; }
+.is-full .fs .exit { display: block; }
+.film:hover .fs, .fs:focus-visible { opacity: 1; }
+@media (hover: none) { .fs { opacity: 0.8; } }
+
+/* the strip under the film: where we are in time, and the live chart */
+.strip { margin: 14px 0 0; }
+.timeline { display: flex; align-items: center; gap: 0; height: 12px; }
+.timeline > span { position: relative; height: 2px; background: rgba(238, 241, 255, 0.12); overflow: hidden; }
+.tl-past { flex: 5.6; border-radius: 2px 0 0 2px; }
+.tl-future { flex: 4.4; border-radius: 0 2px 2px 0; }
+.timeline i { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(238, 241, 255, 0.75); }
+.timeline .tl-bet { flex: none; width: 2px; height: 12px; background: var(--star); overflow: visible; }
+/* the chart is drawn by charts.js on the canvas #chart; the tabs beside it pick what it shows */
+.chart-row { display: flex; gap: 14px; align-items: stretch; margin-top: 8px; }
+#chart { flex: 1; min-width: 0; height: 150px; display: block; }
+.chart-tabs { display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.tab { cursor: pointer; text-align: left; font-size: 13px; color: var(--dim); background: none; border: 0; padding: 4px 0; border-bottom: 1px solid transparent; }
+.tab[aria-selected="true"] { color: var(--star); border-bottom-color: var(--star); }
+
+/* the console: one sentence and the one or two things you can do now (the same width as the film above it);
+   game.js shows one .phase at a time: past, bet, thinking, ready, future, or show / show-end for a remarkable galaxy */
+.console { width: min(84vw, calc((100vh - 380px) * 16 / 9)); min-width: min(100%, 560px); margin: 12px auto 0; }
+.phase { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; min-height: 52px; animation: rise 0.45s var(--ease) both; }
+.phase .say { flex: 1 1 280px; font-size: 18px; }
+.phase[data-phase="bet"] .say { flex-basis: 100%; font: 300 clamp(20px, 1.9vw, 26px)/1.25 var(--display); letter-spacing: -0.02em; }
+.phase .say b { font-weight: 600; }
+.your-bet.off { color: var(--quenched); }
+.your-bet.on { color: var(--forming); }
+.bets { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.bet-word.off { color: var(--quenched); }
+.bet-word.on { color: var(--forming); }
+
+/* the suspense, 1: the model's gauge, its chance that the galaxy switches off: blue below its line ("keeps going"),
+   red past it ("switches off"), as everywhere in the game. Under the film, or beside it when the window leaves room. */
+.stage { position: relative; }     /* so the gauge beside the film (.gauge-side) is placed from the stage */
+.gauge { display: flex; align-items: center; gap: 16px; margin: 10px 0 0; }
+.gauge svg { flex: none; width: 176px; overflow: visible; }
+.g-zone { fill: none; stroke-width: 12; opacity: 0.32; transition: opacity 0.6s var(--ease), stroke-width 0.6s var(--ease); }
+.g-zone.on { stroke: var(--forming); }
+.g-zone.off { stroke: var(--quenched); }
+.g-zone.lit { opacity: 1; stroke-width: 16; }
+.g-tick { stroke: var(--star); stroke-width: 2.4; stroke-linecap: round; }
+.g-th { font: 600 10px var(--text); fill: var(--star); }
+.g-end { font: 600 11px var(--text); }
+.g-end.on { fill: var(--forming); }
+.g-end.off { fill: var(--quenched); }
+.g-needle line { stroke: var(--star); stroke-width: 2.8; stroke-linecap: round; }
+.gauge:not(.live) .g-needle { opacity: 0; }                 /* sealed: the model's needle is not shown yet */
+.g-hub { fill: var(--star); }
+.g-value { font: 300 17px var(--display); fill: var(--star); }
+.g-say { margin: 0; font-size: 14px; line-height: 1.4; color: var(--dim); max-width: 34ch; }
+.g-say b { color: var(--star); font-weight: 600; }
+/* beside the film: game.js adds .gauge-side when the window has room on the right, and sets --gauge-top and --gauge-w */
+.stage.gauge-side .gauge { position: absolute; left: calc(100% + 28px); top: var(--gauge-top, 0); width: var(--gauge-w, 210px); margin: 0;
+  flex-direction: column; align-items: flex-start; gap: 6px; }
+.stage.gauge-side .gauge svg { width: 100%; }
+
+/* the suspense, 2: the last moments slowed down, closer, the rest of the page in the dark */
+.stage.slowing .film > video:first-child { transform: scale(1.12); transition: transform 2s cubic-bezier(0.3, 0.1, 0.3, 1); }
+.strip, .console .say, .top { transition: opacity 1s var(--ease); }
+body.hush .strip, body.hush .console .say, body.hush .top { opacity: 0.16; }
+
+/* then a short black and the verdict in large type; its colour washes out over the sky as the black lifts.
+   Layer 45: above the page and its header, below the opening. --wash is the verdict's colour as "r, g, b",
+   set by game.js (white until then) */
+.finale { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; background: #000; opacity: 0; transition: opacity 0.35s ease; }
+.finale.on { opacity: 1; }
+.finale.out { opacity: 0; transition: opacity 0.85s var(--ease); }
+.finale::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle, rgba(var(--wash, 238, 241, 255), 0.34), rgba(var(--wash, 238, 241, 255), 0) 62%); }
+.finale.out::after { animation: wash 0.9s var(--ease) both; }
+@keyframes wash { from { opacity: 1; transform: scale(0.5); } to { opacity: 0; transform: scale(2.2); } }
+.finale-word { position: relative; z-index: 1; margin: 0; padding: 0 20px; text-align: center; text-wrap: balance; opacity: 0;
+  font: 300 clamp(44px, 7vw, 108px)/1.02 var(--display); letter-spacing: -0.035em; }
+.finale-word.off { color: var(--quenched); }
+.finale-word.on { color: var(--forming); }
+.finale.word .finale-word { animation: verdict 0.9s var(--ease) both; }
+
+/* =====================================================================
+   4g. REMARKABLE GALAXIES ON THE HOME PAGE: the three cards
+   =====================================================================
+   The row of three cards at the foot of the home column (a picture and a name each), their sizes
+   on tall and short computer windows, and the extra preview row. */
+
+.home-cards { margin-top: 26px; }
+.home-cards-say { font-size: 14px; color: var(--dim); margin-bottom: 10px; }
+.cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, var(--card-w, 1fr))); gap: 12px; }
+/* on a computer the cards' size follows the window's height, so the column still fits a short window
+   (55vh - 380px: the cards take what is left once the title and text have their room; never under 96 px or over 168 px) */
+#home-cards-list { --card-w: clamp(96px, calc(55vh - 380px), 168px); }
+/* On a computer window 860 px tall or more: the home column may grow to 760 px on a big screen, the title is a touch
+   smaller, and the cards share the whole width of the column wherever the window is tall enough (on a shorter one their
+   size still follows its height, so the column never runs into the link at the bottom). */
+@media not (((max-width: 899px) and (max-aspect-ratio: 6/5)) or (max-height: 479px) or ((max-width: 1099px) and (max-height: 699px))) {
+  @media (min-height: 860px) {
+    #screen-home { width: min(calc(40vw - var(--home-left) - 28px), 760px); }
+    #screen-home h1 { font-size: clamp(48px, min(7.6vw, 11vh), 116px); }
+    #home-cards-list { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: calc(3 * clamp(96px, calc(59vh - 380px), 320px) + 24px); }
+  }
+}
+/* a computer window under 860 px tall: the picture beside the name, so the column still fits */
+@media not (((max-width: 899px) and (max-aspect-ratio: 6/5)) or (max-height: 479px) or ((max-width: 1099px) and (max-height: 699px))) {
+  @media (max-height: 859px) {
+    #home-cards-list { --card-w: 1fr; }
+    #home-cards-list .card { flex-direction: row; align-items: center; gap: 9px; padding: 6px; text-align: left; }
+    #home-cards-list .card .thumb { width: clamp(44px, 7vh, 56px); flex: none; border-radius: 8px; }
+    #home-cards-list .card .name { font-size: 13px; }
+  }
+}
+/* a card: the galaxy's picture, large and square, with its name just below */
+.card { display: flex; flex-direction: column; gap: 9px; width: 100%; padding: 7px 7px 11px; text-align: center; cursor: pointer;
+  background: rgba(3, 4, 11, 0.55); border: 1px solid var(--line); border-radius: 14px; color: var(--star); font: inherit;
+  transition: border-color 0.25s, box-shadow 0.3s, scale 0.25s var(--ease); animation: rise 0.45s var(--ease) both; }
+.cards li:nth-child(2) .card { animation-delay: 0.06s; }
+.cards li:nth-child(3) .card { animation-delay: 0.12s; }
+.card:hover, .card.lit { border-color: rgba(238, 241, 255, 0.5); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+.card.lit { scale: 1.04; }                       /* lit from its point on the map */
+.card .thumb { width: 100%; aspect-ratio: 1; border-radius: 9px; overflow: hidden; background: #000; display: block; }
+.card .thumb > * { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card .thumb .crop { transform: scale(1.8); }      /* a picture marked .crop is zoomed in on the galaxy */
+.card .name { font-size: 14px; font-weight: 600; line-height: 1.25; display: block; text-wrap: balance; }
+.card .cap { display: block; margin-top: 2px; font-size: 11.5px; color: var(--dim); line-height: 1.3; }
+.card.soon { cursor: default; border-style: dashed; color: var(--dim); }
+.card.soon:hover { border-color: var(--line); box-shadow: none; }
+.card.soon .thumb { background: radial-gradient(circle, rgba(238, 241, 255, 0.18) 0 2px, transparent 3px), #05060f; }
+/* after the opening the cards wait for the column to rise first, then come in one after the other */
+body.intro-done .card { animation-delay: 0.5s; }
+body.intro-done .cards li:nth-child(2) .card { animation-delay: 0.62s; }
+body.intro-done .cards li:nth-child(3) .card { animation-delay: 0.74s; }
+
+/* the preview row adds height: a smaller title keeps the whole text on a laptop screen */
+body.is-preview #screen-home h1 { font-size: clamp(40px, min(5vw, 7vh), 80px); margin-bottom: 20px; }
+.preview-list { margin-top: 20px; padding-top: 14px; border-top: 1px dashed rgba(242, 196, 109, 0.4); }
+.preview-list .home-cards-say { color: var(--gold); }
+
+/* =====================================================================
+   4h. THREE REMARKABLE GALAXIES: the list and one galaxy's intro (meet)
+   =====================================================================
+   The showcase screen (the list of three galaxies to watch, no bet needed) and the meet screen that
+   introduces one of them before its film; the card's picture and name glide from the home page into it. */
+
+.link-btn { display: inline-block; margin-top: 18px; padding: 4px 0; cursor: pointer; background: none; border: 0; font-size: 15px; color: var(--dim);
+  text-decoration: underline; text-underline-offset: 5px; text-decoration-color: rgba(238, 241, 255, 0.25); }
+.link-btn:hover { color: var(--star); text-decoration-color: var(--star); }
+#screen-showcase h2 { margin-bottom: 22px; }
+.showcase-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.showcase-list button { display: block; width: 100%; text-align: left; cursor: pointer; background: none; border: 0; border-top: 1px solid var(--line);
+  padding: 16px 0 14px; color: var(--star); transition: color 0.2s, scale 0.25s var(--ease); transform-origin: left center; }
+.showcase-list li:last-child button { border-bottom: 1px solid var(--line); }
+.showcase-list .title { display: block; font: 300 22px/1.2 var(--display); letter-spacing: -0.02em; }
+.showcase-list .story { display: block; margin-top: 6px; font-size: 15px; color: var(--dim); max-width: 44ch; }
+.showcase-list button:hover .title, .showcase-list button:focus-visible .title { color: #fff; }
+.showcase-list button:hover .story { color: var(--star); }
+
+/* a remarkable galaxy before its film: its picture, large, its name, why it is remarkable, and the button to watch it */
+.meet-figure { width: clamp(180px, 40vh, 380px); max-width: 100%; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: #000; margin-bottom: 22px;
+  box-shadow: 0 0 0 1px var(--line), 0 18px 50px rgba(0, 0, 0, 0.6); animation: rise 0.5s var(--ease) both; }
+.meet-figure img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#screen-meet h2 { font-size: clamp(34px, min(4.4vw, 7vh), 64px); margin-bottom: 18px; }
+/* the card's picture and name travel into the intro (view transition, see morph in game.js): the browser
+   matches the elements that carry the same view-transition-name before and after, and slides one into the other.
+   "root" is the rest of the page, which simply cross-fades in 0.3 s. [data-morphed]: no second entrance on top */
+#meet-figure { view-transition-name: galaxy-pic; }
+#meet-title { view-transition-name: galaxy-name; }
+::view-transition-group(galaxy-pic), ::view-transition-group(galaxy-name) { animation-duration: 0.55s; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.3s; }
+[data-morphed], [data-morphed] .meet-figure { animation: none !important; }
+.meet-intro { color: var(--dim); max-width: 40ch; font-size: 17px; line-height: 1.5; text-wrap: pretty; }
+#screen-meet .actions { margin-top: 24px; }
+.show-story { display: block; margin-top: 4px; font-size: 15.5px; color: var(--dim); }
+.show-truth.off { color: var(--quenched); }
+.show-truth.on { color: var(--forming); }
+
+/* =====================================================================
+   4i. THE VERDICT: the result, the way into 3D, the sky's colour key
+   =====================================================================
+   Back in the sky after the film: what really happened (red or blue), your bet and the model's,
+   the button into 3D with the galaxy turning in it, and the key to the sky's colours. */
+
+.truth { font: 300 clamp(44px, 5vw, 72px)/1.02 var(--display); letter-spacing: -0.035em; margin-bottom: 26px; animation: verdict 1s var(--ease) both; }
+.truth.off { color: var(--quenched); }
+.truth.on { color: var(--forming); }
+@keyframes verdict { from { opacity: 0; transform: scale(0.95); filter: blur(12px); } to { opacity: 1; transform: none; filter: none; } }
+.bets-result { list-style: none; padding: 0; margin: 0 0 18px; display: grid; gap: 8px; font-size: 17px; }
+.bets-result li { display: flex; align-items: center; gap: 10px; animation: rise 0.6s var(--ease) both; }
+.bets-result li:nth-child(2) { animation-delay: 0.15s; }
+.bets-result svg { width: 18px; height: 18px; flex: none; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.bets-result .right svg { stroke: var(--right); }
+.bets-result .wrong svg { stroke: var(--quenched); }
+.bets-result .what.off { color: var(--quenched); }
+.bets-result .what.on { color: var(--forming); }
+.box-line { color: var(--dim); max-width: 44ch; font-size: 15.5px; animation: rise 0.6s 0.3s var(--ease) both; }
+
+/* the next step: your galaxy as its film left it, with a faint orbit around it, opens in 3D */
+.see3d { position: relative; display: flex; align-items: center; gap: 22px; width: 100%; margin-top: 28px; padding: 0; background: none; border: 0;
+  border-radius: 999px; color: var(--star); text-align: left; cursor: pointer; --g: 92px; animation: rise 0.7s 0.45s var(--ease) both; }
+.see3d-galaxy { flex: none; width: var(--g); height: var(--g); border-radius: 50%; overflow: hidden; background: #000;
+  -webkit-mask-image: radial-gradient(circle, #000 50%, transparent 71%); mask-image: radial-gradient(circle, #000 50%, transparent 71%);
+  transition: transform 1.4s var(--ease), filter 0.4s; }
+.see3d-galaxy > * { width: 100%; height: 100%; object-fit: cover; display: block; }
+.see3d-galaxy .crop { transform: scale(1.8); }
+/* the faint orbit: a flat ellipse around the galaxy, sized from --g (the galaxy's width), that turns under the pointer */
+.see3d::before { content: ""; position: absolute; left: calc(var(--g) * -0.14); top: 50%; width: calc(var(--g) * 1.28); height: calc(var(--g) * 0.4);
+  border: 1px solid rgba(238, 241, 255, 0.26); border-radius: 50%; transform: translateY(-50%) rotate(-16deg); pointer-events: none;
+  transition: transform 1.2s var(--ease), border-color 0.3s; }
+.see3d-text { display: grid; justify-items: start; gap: 9px; }
+.see3d small { font-size: 13.5px; color: var(--dim); }
+.see3d:hover .btn.primary { background: #fff; }
+.see3d:hover .see3d-galaxy, .see3d:focus-visible .see3d-galaxy { transform: rotate(-24deg) scale(1.05); filter: brightness(1.18); }
+.see3d:hover::before, .see3d:focus-visible::before { transform: translateY(-50%) rotate(-2deg); border-color: rgba(238, 241, 255, 0.5); }
+.see3d:active .btn { transform: scale(0.97); }
+.see3d:focus-visible { outline-offset: 8px; }
+.verdict-more .actions { margin-top: 22px; }
+
+/* the key to the sky's colours: the bar runs through the same colours as sky.js, from 0 % (grey) to 60 % and more (red) */
+.legend { display: grid; gap: 6px; width: min(100%, 300px); margin-top: 28px; font-size: 13px; color: var(--dim); animation: rise 0.8s 0.4s var(--ease) both; }
+.legend-bar { height: 6px; border-radius: 999px; background: linear-gradient(90deg, rgb(70, 76, 104) 0%, rgb(91, 143, 214) 15%, rgb(158, 106, 152) 50%, rgb(224, 69, 90) 100%); }
+.legend-ticks { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; color: var(--faint); font-size: 12px; }
+.legend-toggle { justify-self: start; cursor: pointer; margin-top: 4px; background: none; border: 0; padding: 4px 0; font-size: 13px; color: var(--dim);
+  display: inline-flex; align-items: center; gap: 8px; }
+.legend-toggle::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid currentColor; }
+.legend-toggle[aria-pressed="true"] { color: var(--star); }
+.legend-toggle:hover { color: var(--star); }
+
+/* a wider screen: the verdict fills the column beside the sky, from its top edge to its baseline; the sky's
+   colour key sits under the sky, like a chart's key */
+@media not (((max-width: 899px) and (max-aspect-ratio: 6/5)) or (max-height: 479px) or ((max-width: 1099px) and (max-height: 699px))) {
+  body[data-screen="verdict"] #screen-verdict { display: flex; flex-direction: column; justify-content: space-between; }
+  #screen-verdict { position: absolute; top: 12vh; bottom: auto; min-height: 78vh; width: min(calc(40vw - var(--rail-left) - 28px), 560px);
+    animation: fade 0.8s var(--ease) both; }        /* no slide: the key under the sky is placed on the page, not in the column */
+  #screen-verdict .truth { font-size: clamp(36px, min(5vw, 7.4vh), 72px); margin-bottom: clamp(14px, 3vh, 26px); }
+  #screen-verdict .see3d { --g: clamp(80px, min(17vh, 11vw), 210px); margin: 20px 0; }
+  #screen-verdict .verdict-more .actions { margin-top: 0; }
+  /* the key fits in the room under the sky (10vh) even when its words take two lines */
+  #screen-verdict .legend { position: fixed; left: var(--fl); right: calc(100vw - var(--fr) + 110px); top: calc(var(--fb) + 10px); width: auto; margin: 0;
+    grid-template-columns: minmax(110px, 180px) 1fr; column-gap: 20px; row-gap: 0; align-items: center; font-size: 12.5px; }
+  #screen-verdict .legend-bar { grid-area: 1 / 1; }
+  #screen-verdict .legend-ticks { grid-area: 2 / 1; align-self: start; }
+  #screen-verdict .legend > span:not([class]) { grid-area: 1 / 2; line-height: 1.3; }
+  #screen-verdict .legend-toggle { grid-area: 2 / 2; margin: 0; padding: 2px 0; font-size: 12.5px; }
+}
+/* a short or narrow laptop window: the verdict can reach the bottom of the window, so "How this was made"
+   (also on the home page) leaves this screen */
+@media not (((max-width: 899px) and (max-aspect-ratio: 6/5)) or (max-height: 479px) or ((max-width: 1099px) and (max-height: 699px))) {
+  @media (max-height: 799px), (max-width: 1199px) {
+    body[data-screen="verdict"] .made-link { display: none; }
+  }
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* =====================================================================
+   4j. THE 3D VIEW: its frame, time bar, controls and the column beside it
+   =====================================================================
+   The galaxy itself is drawn in 3D by viewer3d.js (block 3) inside .viewer; here is its frame on the
+   right, the bar over its bottom (play, time, layers), the column of text on the left, and full screen. */
+
+.viewer { position: fixed; left: 38vw; right: 3vw; top: 76px; bottom: 6vh; border-radius: 16px; overflow: hidden; background: #000;
+  box-shadow: 0 0 0 1px rgba(238, 241, 255, 0.08); }
+.viewer canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }   /* touch-action none: a drag turns the galaxy instead of scrolling the page */
+.fs-3d { position: absolute; right: 14px; top: 14px; z-index: 2; }
+.fs-3d .exit, .is-full .fs-3d .enter, .is-full .fs .enter { display: none; }
+.is-full .fs-3d .exit { display: block; }
+/* the bar over the bottom of the 3D view: time, then what to show */
+.viewer-bar { position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 2; display: grid; gap: 10px; padding: 12px 14px 10px;
+  border-radius: 16px; background: rgba(3, 4, 11, 0.66); backdrop-filter: blur(8px); box-shadow: 0 0 0 1px var(--line); }
+.time3d { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; }
+.play { width: 40px; height: 40px; border-radius: 50%; }
+.play svg { width: 16px; height: 16px; }
+.play .i-play { fill: currentColor; stroke: none; margin-left: 2px; }
+.play .i-pause { display: none; stroke-width: 2.4; }
+.play[aria-pressed="true"] .i-play { display: none; }
+.play[aria-pressed="true"] .i-pause { display: block; }
+.t3-track { position: relative; height: 62px; }
+.t3-track canvas { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 44px; display: block; }
+/* the time slider, drawn by hand: Chrome and Safari read the ::-webkit- rules, Firefox the ::-moz- ones */
+.scrub { -webkit-appearance: none; appearance: none; position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 18px; margin: 0;
+  background: transparent; cursor: pointer; }
+.scrub::-webkit-slider-runnable-track { height: 2px; background: rgba(238, 241, 255, 0.18); border-radius: 1px; }
+.scrub::-moz-range-track { height: 2px; background: rgba(238, 241, 255, 0.18); border-radius: 1px; }
+.scrub::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -7px; border-radius: 50%; background: var(--star); border: 3px solid var(--void); box-shadow: 0 0 0 1px rgba(238, 241, 255, 0.6); }
+.scrub::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--star); border: 3px solid var(--void); box-shadow: 0 0 0 1px rgba(238, 241, 255, 0.6); }
+.scrub:focus-visible { outline: none; }
+.scrub:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--gold); }
+.scrub:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--gold); }
+.t3-when { min-width: 12.5em; font-size: 14px; color: var(--dim); font-variant-numeric: tabular-nums; line-height: 1.35; }
+.t3-when b { font: 300 22px var(--display); letter-spacing: -0.02em; color: var(--star); }
+.t3-when small { display: block; font-size: 12px; color: var(--faint); min-height: 1.35em; }
+.viewer-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.viewer-detail { margin-left: auto; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.viewer-status { position: absolute; left: 16px; top: 16px; z-index: 2; margin: 0; font-size: 14px; color: var(--dim); }
+/* the column beside the 3D view, from its top to its bottom: what it is, the galaxy's numbers at the moment
+   shown (they follow the time bar), what the colours show, and where to go next */
+.rail-3d { position: fixed; left: var(--rail-left); top: 76px; bottom: 6vh; width: min(calc(38vw - var(--rail-left) - 36px), 420px);
+  display: flex; flex-direction: column; justify-content: space-between; gap: 18px; animation: enter-forward 0.4s 0.08s var(--ease) both; }
+.rail-3d h2 { margin-bottom: 14px; }
+.r3-head p { color: var(--dim); }
+.r3-now { display: grid; gap: clamp(8px, 2vh, 18px); margin: 0; }
+.r3-now div { display: flex; flex-direction: row-reverse; justify-content: flex-end; align-items: baseline; gap: 10px; }
+.r3-now dd { margin: 0; min-width: 3.2em; font: 300 clamp(26px, 4.4vh, 42px)/1 var(--display); letter-spacing: -0.02em; color: var(--star); font-variant-numeric: tabular-nums; }
+.r3-now dt { font-size: 14.5px; color: var(--dim); }
+.key3d { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; color: var(--dim); }
+.key3d li { display: flex; align-items: center; gap: 9px; }
+.key3d i { width: 14px; height: 14px; margin: -3px; border-radius: 50%;     /* drawn like the 3D view's particles: a soft round point */
+  background: radial-gradient(circle, rgb(var(--c)) 0 28%, rgba(var(--c), 0.35) 48%, rgba(var(--c), 0) 70%); }
+.key3d:not([data-stars="on"]) .k-stars, .key3d:not([data-gas="plain"]) .k-gas, .key3d:not([data-gas="sf"]) .k-sf { display: none; }
+.rail-3d .actions { margin-top: 0; }
+.toggles { display: flex; flex-wrap: wrap; gap: 4px; }
+.toggle { cursor: pointer; font-size: 14px; padding: 8px 14px; border-radius: 999px; border: 0; background: transparent; color: var(--dim); }
+.toggle:hover { color: var(--star); }
+.toggle[aria-pressed="true"] { color: var(--void); background: var(--star); }
+
+/* full screen, by the browser or (on iPhones, which only allow it for videos) as a fixed layer over the page */
+.viewer:fullscreen, .viewer.pseudo-full { position: fixed; inset: 0; border-radius: 0; box-shadow: none; }
+.viewer.pseudo-full, .film.pseudo-full { z-index: 50; }   /* layer 50: above the header and the finale */
+.film.pseudo-full { position: fixed; inset: 0; border-radius: 0; aspect-ratio: auto; }
+body.locked { overflow: hidden; }       /* while in that layer the page behind it does not scroll */
+body.locked .top, body.locked .made-link { visibility: hidden; }
+.is-full .viewer-bar { left: 50%; right: auto; transform: translateX(-50%); bottom: max(22px, env(safe-area-inset-bottom)); width: min(880px, calc(100% - 28px)); }
+.is-full .fs-3d, .is-full .fs { top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); opacity: 1; }
+
+/* =====================================================================
+   4k. HOW THIS WAS MADE: the link and the dialog
+   =====================================================================
+   The small link at the bottom left (layer 4) and the dialog it opens, with the dimmed page behind it. */
+
+.made-link { position: fixed; left: var(--rail-left); bottom: 3vh; z-index: 4; cursor: pointer; background: none; border: 0; padding: 4px 0;
+  font-size: 13px; color: var(--faint); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(238, 241, 255, 0.2); }
+.made-link:hover { color: var(--star); }
+body[data-screen="film"] .made-link, body[data-screen="3d"] .made-link { display: none; }
+.made { max-width: 620px; width: calc(100% - 32px); max-height: calc(100vh - 48px); overflow: auto; padding: 32px 34px 26px; border-radius: 20px;
+  background: var(--deep); color: var(--dim); border: 1px solid var(--line); font-size: 15.5px; line-height: 1.6; }
+.made::backdrop { background: rgba(3, 4, 11, 0.72); backdrop-filter: blur(4px); }
+.made[open] { animation: rise 0.45s var(--ease) both; }
+.made h2 { color: var(--star); margin-bottom: 18px; font-size: 26px; }
+.made p { margin-bottom: 12px; }
+.made b { color: var(--star); }
+.made form { margin-top: 12px; text-align: right; }
+
+/* =====================================================================
+   4l. PHONE AND NARROW SCREENS: the narrow layout, then less motion
+   =====================================================================
+   One media query changes the layout of every screen for narrow windows: the sky on top, the text
+   below it and scrolling, the button to go on stuck to the bottom. It comes after all the rules it
+   changes, so it wins over them. Then the rule for people who ask their system for less motion. */
+
+/* narrow: a portrait phone or tablet, or a very short window (a landscape window keeps the sky beside the text).
+   The three tests, any one is enough: under 900 px wide and not much wider than tall; under 480 px tall;
+   under 1100 px wide and under 700 px tall (a small laptop window). game.js uses the same query (NARROW). */
+@media (max-width: 899px) and (max-aspect-ratio: 6/5), (max-height: 479px), (max-width: 1099px) and (max-height: 699px) {
+  :root { --rail-left: 20px; }
+  .top { padding-top: 16px; background: linear-gradient(var(--void) 40%, transparent); padding-bottom: 14px; }
+  /* the sky takes the room above the text (set by the page from the text's height: --sky-h, from game.js) */
+  .rail, .rail-3d { position: relative; left: auto; bottom: auto; width: auto; margin: var(--sky-h, 50vh) 0 0; padding: 0 20px 76px; }
+  /* the button to go on stays on screen while the text scrolls under it */
+  .rail .actions { position: sticky; bottom: 0; z-index: 2; margin: 22px -20px 0; padding: 14px 20px max(16px, env(safe-area-inset-bottom));
+    background: linear-gradient(rgba(3, 4, 11, 0), var(--void) 40%); }
+  .rail .actions:empty, .rail .actions:not(:has(:not([hidden]))) { display: none; }
+  .cards { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 20px; gap: 10px; margin: 0 -20px; padding: 0 20px 4px; scrollbar-width: none; }
+  .cards li { flex: 0 0 auto; width: min(40vw, 170px); scroll-snap-align: start; }
+  /* on a phone the three cards side by side across the whole width, no sideways scroll */
+  #home-cards-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; overflow: visible; max-width: none; }
+  #home-cards-list li { width: auto; }
+  #home-cards-list .card .name { font-size: 12.5px; }
+  .lede { font-size: 16px; }
+  .q-head { margin-bottom: 16px; }
+  .odo { font-size: 30px; }
+  .count-end { margin-top: 18px; }
+  /* a dark fade starting 60 px above the text, behind it (z-index -1), so the sky melts into the text's background */
+  .rail::before { content: ""; position: absolute; inset: -60px 0 0; z-index: -1; background: linear-gradient(transparent, var(--void) 60px); }
+  h1, #screen-home h1 { font-size: clamp(40px, min(19vw, 17vh), 80px); margin-bottom: 16px; }
+  /* on a phone the cosmic web is a smaller portrait image and stays still */
+  .cosmos::before { background-image: url("bg/web-phone-colour.jpg"); animation: none; inset: 0; }
+  .cosmos::after { display: none; }                  /* on a phone the web stays still (battery) */
+  .cosmos-light { display: none; }                 /* a phone: no travelling light (battery) */
+  .wordmark { font-size: clamp(12px, 3.9vw, 18px); }
+  /* a remarkable galaxy's intro: a picture small enough that its words fit above the buttons */
+  .meet-figure { width: min(100%, 30vh); margin-bottom: 16px; }
+  .meet-intro { font-size: 16px; }
+  /* the three steps side by side, each mark above its words, one line in their colours through the marks */
+  .round-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); position: relative; }
+  .round-steps::before { content: ""; position: absolute; top: 14px; left: 16.7%; right: 16.7%; height: 1.5px; opacity: 0.7;
+    background: linear-gradient(90deg, var(--forming), var(--gold) 50%, var(--quenched)); }
+  .rs { flex-direction: column; gap: 6px; text-align: center; }
+  .rs + .rs::before { display: none; }
+  .rs-icon { background: var(--void); position: relative; }
+  .rs-say { white-space: normal; text-wrap: balance; }
+  /* the title and the music button on the first line, the score on a short line of its own under them (it does not
+     fit beside them), and only once there is a score */
+  .top { flex-wrap: wrap; }
+  .top .sound-box { margin-left: auto; }
+  .top .score { order: 3; flex-basis: 100%; margin: 2px 0 0; text-align: right; font-size: 13px; }
+  body[data-rounds="0"] .top .score, body[data-screen="film"] .top .score, body[data-screen="3d"] .top .score { display: none; }
+  .top .sound-box:is(.open, :hover, :focus-within) .sound-volume { width: min(84px, 22vw); }
+  /* while the volume slider is open the full-screen button steps aside, so the top line still fits */
+  .top .sound-box:is(.open, :focus-within) + .page-fs { display: none; }
+  #screen-home { width: auto; }
+  .made-link { position: relative; left: auto; bottom: auto; display: block; margin: -48px 20px 32px; }   /* in the flow, pulled up into the column's bottom padding */
+  .thinking { padding: 10px; }
+  .thinking-head { font-size: 13px; }
+  .thinking-item { font-size: 18px; margin: 8px 0 12px; min-height: 2.6em; }
+  .thinking-dots { gap: 5px; }
+  .thinking-dots li { width: 5px; height: 5px; }
+  .thinking-foot { display: none; }
+  body[data-screen="choose"] .made-link, body[data-screen="verdict"] .made-link { display: none; }
+  /* no "How this was made" link under the questions, the verdict or the 3D column: that room goes to the sky */
+  #screen-choose, #screen-verdict, .rail-3d { padding-bottom: 20px; }
+  /* the film screen: the film across the whole width */
+  #screen-film { padding: 62px 0 32px; }
+  .stage, .console { width: 100%; min-width: 0; padding: 0 12px; }
+  .film { border-radius: 12px; }
+  .chart-row { flex-direction: column-reverse; gap: 4px; }
+  .chart-tabs { flex-direction: row; flex-wrap: wrap; gap: 2px 16px; }
+  #chart { height: 120px; }
+  .phase .say { font-size: 17px; }
+  .bets { width: 100%; }
+  .bets .btn { flex: 1 1 140px; }
+  .gauge { gap: 12px; }
+  .gauge svg { width: 168px; }
+  .g-say { font-size: 13px; }
+  /* the 3D screen: the view on top in the flow (not fixed), its bar more compact, the column under it */
+  .viewer:not(.pseudo-full):not(:fullscreen) { position: relative; left: auto; right: auto; top: auto; bottom: auto; margin: 64px 12px 0; height: 62vh; }
+  .viewer-bar { left: 8px; right: 8px; bottom: 8px; gap: 6px; padding: 10px 10px 8px; }
+  .time3d { grid-template-columns: auto 1fr; gap: 10px; }
+  .t3-when { grid-column: 1 / -1; order: -1; display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+  .t3-when b { font-size: 18px; }
+  .t3-track { height: 56px; }
+  .t3-track canvas { height: 38px; }
+  .toggle { font-size: 13px; padding: 7px 11px; }
+  .viewer-detail { display: none; }
+  .rail-3d { margin-top: 20px; top: auto; }
+  .r3-now { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .r3-now div { flex-direction: column-reverse; align-items: flex-start; gap: 5px; }
+  .r3-now dd { font-size: 26px; min-width: 0; }
+  .r3-now dt { font-size: 12.5px; line-height: 1.3; }
+  .see3d { --g: 80px; gap: 18px; }
+  body[data-screen="3d"] #sky { opacity: 0.1; }
+}
+
+/* ---- less motion: when the system asks for it, every animation and transition ends at once (0.01 ms, not 0,
+   so it still runs and ends: game.js waits for the end of some animations, like the answer's "chosen" press) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* =====================================================================
+   5. MUSIC BUTTON: the music button, its volume slider, the full-screen button beside it
+   =====================================================================
+   The controls of sound.js (block 5), at the top right of the header: the button that turns the
+   music on and off, the volume slider that slides out of it, and the page's full-screen button. */
+
+.top .score { margin-left: auto; }      /* the score pushes itself and everything after it to the right */
+.sound-box { margin-left: 16px; display: flex; align-items: center; gap: 8px; }
+/* the same square as the page's other icon buttons (.icon-btn: full screen), dim while the music is off */
+.sound { flex: none; width: 36px; height: 36px; display: grid; place-items: center; padding: 0; cursor: pointer;
+  background: rgba(3, 4, 11, 0.55); border: 1px solid var(--line); border-radius: 10px; color: var(--dim);
+  transition: color 0.3s, border-color 0.3s, background 0.3s; }
+.sound svg { width: 17px; height: 17px; stroke-width: 1.7; }
+.sound:hover, .sound:focus-visible { color: var(--star); border-color: rgba(238, 241, 255, 0.45); }
+.sound:focus-visible { outline: 2px solid var(--star); outline-offset: 2px; }
+/* the whole game full screen, beside the music button and drawn like it */
+.page-fs { flex: none; color: var(--dim); transition: color 0.3s, border-color 0.3s; }
+.page-fs:hover, .page-fs:focus-visible { color: var(--star); border-color: rgba(238, 241, 255, 0.45); }
+.page-fs:focus-visible { outline: 2px solid var(--star); outline-offset: 2px; }
+.page-fs .exit, body.page-full .page-fs .enter { display: none; }
+body.page-full .page-fs .exit { display: inline; }
+.sound .wave { display: none; }
+.sound[aria-pressed="true"] { color: var(--star); }
+.sound[aria-pressed="true"] .wave { display: inline; }
+.sound[aria-pressed="true"] .mute { display: none; }
+
+/* the volume slider: shown on hover or focus on desktop; on touch screens, for a few seconds after the music starts or the slider moves */
+.sound-volume { -webkit-appearance: none; appearance: none; width: 0; height: 34px; margin: 0; padding: 0; opacity: 0; pointer-events: none;
+  background: transparent; cursor: pointer; transition: width 0.3s var(--ease), opacity 0.3s; --fill: 30%; }
+.sound-box:hover .sound-volume, .sound-box:focus-within .sound-volume { width: 92px; opacity: 1; pointer-events: auto; }
+@media (hover: none) {
+  .sound-box.open .sound-volume { width: 100px; opacity: 1; pointer-events: auto; }
+}
+/* the slider's track, white up to the volume: Chrome and Safari draw it from --fill (set by sound.js when the
+   volume moves), Firefox has its own "progress" part for that */
+.sound-volume::-webkit-slider-runnable-track { height: 3px; border-radius: 2px;
+  background: linear-gradient(to right, var(--star) var(--fill), rgba(238, 241, 255, 0.22) var(--fill)); }
+.sound-volume::-moz-range-track { height: 3px; border-radius: 2px; background: rgba(238, 241, 255, 0.22); }
+.sound-volume::-moz-range-progress { height: 3px; border-radius: 2px; background: var(--star); }
+.sound-volume::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border-radius: 50%; background: var(--star); border: 0; }
+.sound-volume::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--star); border: 0; }
+.sound-volume:focus-visible { outline: 2px solid var(--star); outline-offset: 2px; border-radius: 4px; }
+@media (hover: none) { .sound-volume::-webkit-slider-thumb { width: 20px; height: 20px; margin-top: -8.5px; } .sound-volume::-moz-range-thumb { width: 20px; height: 20px; } }
