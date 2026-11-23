@@ -233,13 +233,35 @@
         <p class="say"><span id="past-text">Its past, up to the moment of your bet.</span></p>
         <button class="btn quiet" id="replay-past">Watch again</button>
       </div>
-      <div class="phase" data-phase="bet" hidden>
-        <p class="say">In the next billion years, will it stop making stars?</p>
-        <div class="bets">
-          <button class="btn off" data-guess="off">It switches off</button>
-          <button class="btn on" data-guess="on">It keeps going</button>
+      <!-- the bet: in the middle of the screen, the rest dimmed behind it; the question in the title's round dots,
+           then the two answers as two big buttons, side by side (one above the other on a very narrow phone):
+           amber, a light that goes out; blue, stars that twinkle -->
+      <div class="phase bet-moment" data-phase="bet" role="group" aria-labelledby="bet-q" hidden>
+        <div class="bet-box">
+          <h2 class="bet-q" id="bet-q">In the next billion years, will it stop making stars?</h2>
+          <div class="picks">
+            <button class="pick off" data-guess="off">
+              <svg class="pick-icon" viewBox="0 0 64 64" aria-hidden="true">
+                <circle class="p-glow" cx="32" cy="32" r="24"/>
+                <g class="p-rays">
+                  <path d="M32 6v8M32 50v8M6 32h8M50 32h8M13.6 13.6l5.7 5.7M44.7 44.7l5.7 5.7M13.6 50.4l5.7-5.7M44.7 19.3l5.7-5.7"/>
+                </g>
+                <circle class="p-core" cx="32" cy="32" r="9"/>
+              </svg>
+              <span class="pick-say">It switches off</span>
+            </button>
+            <button class="pick on" data-guess="on">
+              <svg class="pick-icon" viewBox="0 0 64 64" aria-hidden="true">
+                <path class="p-star s1" d="M27 14Q27 33 46 33Q27 33 27 52Q27 33 8 33Q27 33 27 14Z"/>
+                <path class="p-star s2" d="M48 6Q48 15 57 15Q48 15 48 24Q48 15 39 15Q48 15 48 6Z"/>
+                <path class="p-star s3" d="M50 42Q50 48 56 48Q50 48 50 54Q50 48 44 48Q50 48 50 42Z"/>
+                <path class="p-star s4" d="M11 6Q11 10 15 10Q11 10 11 14Q11 10 7 10Q11 10 11 6Z"/>
+              </svg>
+              <span class="pick-say">It keeps going</span>
+            </button>
+          </div>
+          <button class="btn quiet" id="replay-past-2">Watch again</button>
         </div>
-        <button class="btn quiet" id="replay-past-2">Watch again</button>
       </div>
       <div class="phase" data-phase="thinking" hidden>
         <p class="say">You bet <b class="your-bet"></b>. Now the model bets.</p>

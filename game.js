@@ -564,6 +564,8 @@ const isClean = (clip = state.clip) => hasFilm(`${clip}_clean`);
 
 function setPhase(name) {
   document.querySelectorAll(".console .phase").forEach((p) => { p.hidden = p.dataset.phase !== name; });
+  // the bet covers the middle of the screen: the film and its chart behind it wait, also for the keyboard
+  $("stage").inert = name === "bet";
 }
 
 function playClip(clip, autoplay = true) {
@@ -881,10 +883,9 @@ function onEnded() {
     return;
   }
   if (state.clip === "past" && !state.guess && state.galaxy) {
-    setPhase("bet");
-    sealGauge();                                     // the model's gauge, beside your choice
+    setPhase("bet");                                 // in the middle of the screen (fixed): no scrolling needed
+    sealGauge();                                     // the model's gauge, beside the film behind your choice
     document.querySelector('[data-guess="off"]').focus({ preventScroll: true });
-    keepInView(document.querySelector('.phase[data-phase="bet"]'));   // your choice in view on a short window
   }
   if (state.clip === "future" && state.rewatch) {
     setTimeout(backToSky, REDUCED ? 200 : 900);
@@ -1990,8 +1991,17 @@ async function init() {
     });
   });
   $("go-past").onclick = startRound;
-  $("replay-past").onclick = $("replay-past-2").onclick = () => playClip("past");
+  $("replay-past").onclick = () => playClip("past");
+  // from the bet (which covers the film): the bet steps aside while the past plays again, and comes back at its end (onEnded)
+  $("replay-past-2").onclick = () => { setPhase("past"); playClip("past"); };
   document.querySelectorAll("[data-guess]").forEach((b) => (b.onclick = () => makeGuess(b.dataset.guess)));
+  // the bet with the keyboard: Tab, Enter and Space as on any button, and the arrow keys go from one answer to the other
+  document.querySelector('.phase[data-phase="bet"]').addEventListener("keydown", (e) => {
+    const picks = [...document.querySelectorAll("[data-guess]")], k = picks.indexOf(document.activeElement);
+    if (k < 0 || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();                              // no page scroll with the arrows
+    picks[1 - k].focus();
+  });
   $("play-future").onclick = () => {
     setPhase("future");
     startFuture();

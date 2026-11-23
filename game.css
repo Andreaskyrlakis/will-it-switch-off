@@ -29,6 +29,7 @@
    Layers (z-index), from the back to the front:
      0  the sky canvas and the cosmic web       1  the sky's axis words
      2  main (the screens)                      3  a leaving screen's copy (.ghost), the film's veil
+                                                5  the bet over the film (inside main, so still below the header)
      4  "How this was made", the film's full-screen button
      10 the header                              45 the finale (black, then the verdict word)
      50 a film or 3D view in full screen        60 the opening (above everything)
@@ -53,6 +54,7 @@
   --quenched: #e0455a;
   --forming: #5b8fd6;
   --gold: #f2c46d;
+  --ember: 242, 160, 61;   /* amber, as "r, g, b": the bet's "It switches off" (a light going out); deeper than the gold of Start */
   --right: #8fd6a4;
   --display: "Unbounded", "Segoe UI", system-ui, sans-serif;
   --text: "Figtree", "Segoe UI", system-ui, sans-serif;
@@ -318,9 +320,6 @@ h2 { font: 300 clamp(26px, 2.5vw, 36px)/1.15 var(--display); letter-spacing: -0.
 .btn.primary:hover { background: #fff; }
 .btn.quiet { border-color: transparent; color: var(--dim); padding-left: 14px; padding-right: 14px; }
 .btn.quiet:hover { color: var(--star); border-color: var(--line); }
-.btn.off { background: var(--quenched); border-color: var(--quenched); color: var(--void); }
-.btn.on { background: var(--forming); border-color: var(--forming); color: var(--void); }
-.btn.off:hover, .btn.on:hover { filter: brightness(1.08); }
 
 /* =====================================================================
    4e. CHOOSING: the four questions, the answers, the rolling count
@@ -550,7 +549,6 @@ h2 { font: 300 clamp(26px, 2.5vw, 36px)/1.15 var(--display); letter-spacing: -0.
 .console { width: min(84vw, calc((100vh - 380px) * 16 / 9)); min-width: min(100%, 560px); margin: 12px auto 0; }
 .phase { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; min-height: 52px; animation: rise 0.45s var(--ease) both; }
 .phase .say { flex: 1 1 280px; font-size: 18px; }
-.phase[data-phase="bet"] .say { flex-basis: 100%; font: 300 clamp(20px, 1.9vw, 26px)/1.25 var(--display); letter-spacing: -0.02em; }
 .phase .say b { font-weight: 600; }
 .your-bet.off { color: var(--quenched); }
 .your-bet.on { color: var(--forming); }
@@ -558,6 +556,68 @@ h2 { font: 300 clamp(26px, 2.5vw, 36px)/1.15 var(--display); letter-spacing: -0.
 
 .bet-word.off { color: var(--quenched); }
 .bet-word.on { color: var(--forming); }
+
+/* the bet, in the middle of the screen. The rest of the page goes darker but stays in sight (darker in the middle,
+   behind the words), softly blurred so its words never mix with the question's dots; the question is in the title's
+   round dots; under it the two answers as two big buttons.
+   Layer 5 inside main: above the film, below the header (the music button stays at hand). One moment of motion:
+   the dark comes, the question arrives and beats once like the title, the two answers rise one after the other. */
+.bet-moment { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; overflow-y: auto; min-height: 0;
+  padding: 76px 20px 28px; background: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(3, 4, 11, 0.82), rgba(3, 4, 11, 0.56));
+  -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); animation: bet-dark 0.45s var(--ease) both; }
+@keyframes bet-dark { from { opacity: 0; } to { opacity: 1; } }
+.bet-box { width: min(100%, 880px); display: grid; justify-items: center; text-align: center; }
+.bet-q { font: 800 clamp(30px, min(3.8vw, 6.6vh), 58px)/1.1 var(--title); font-variation-settings: "ROND" 100; color: var(--star);
+  text-shadow: 0.1em 0.1em 0 var(--title-shade); max-width: 27ch; text-wrap: balance; margin: 0 0 clamp(24px, 4.6vh, 46px);
+  animation: bet-beat 1.2s 0.12s both; }
+@keyframes bet-beat {
+  0% { opacity: 0; transform: scale(0.97); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  32% { opacity: 1; transform: scale(1); filter: brightness(1); text-shadow: 0.1em 0.1em 0 var(--title-shade), 0 0 0.02em rgba(238, 241, 255, 0); animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1); }
+  40% { transform: scale(1.035); filter: brightness(1.35); text-shadow: 0.1em 0.1em 0 var(--title-shade), 0 0 0.2em rgba(238, 241, 255, 0.7); animation-timing-function: cubic-bezier(0.3, 0, 0.4, 1); }
+  70%, 100% { opacity: 1; transform: scale(1); filter: brightness(1); text-shadow: 0.1em 0.1em 0 var(--title-shade), 0 0 0.02em rgba(238, 241, 255, 0); }
+}
+/* the two answers: --c is the answer's colour as "r, g, b", --ink its words (a lighter shade of it, 9:1 on the button).
+   The arrival uses "transform" (the rise animation), so pointing and pressing use "translate" and "scale", which add to it */
+.picks { display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(12px, 1.8vw, 22px); width: 100%; }
+.pick { --c: var(--ember); --ink: #ffd9a6; flex: 0 1 clamp(200px, 19vw, 264px); min-height: clamp(150px, 21vh, 186px);
+  display: grid; justify-items: center; align-content: center; gap: 14px; padding: 22px 18px 20px; cursor: pointer;
+  border-radius: 22px; border: 1.5px solid rgba(var(--c), 0.55); color: var(--ink);
+  background: linear-gradient(rgba(var(--c), 0.15), rgba(var(--c), 0.15)), var(--deep);
+  box-shadow: 0 16px 34px -14px rgba(var(--c), 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font: 600 clamp(17px, 1.45vw, 21px)/1.15 var(--text); text-wrap: balance;
+  transition: translate 0.22s var(--ease), scale 0.22s var(--ease), border-color 0.22s, box-shadow 0.22s, background 0.22s;
+  animation: rise 0.6s 0.34s var(--ease) both; }
+.pick.on { --c: 91, 143, 214; --ink: #c2d8f8; animation-delay: 0.44s; }
+.pick:hover { translate: 0 -3px; scale: 1.02; border-color: rgb(var(--c));
+  background: linear-gradient(rgba(var(--c), 0.27), rgba(var(--c), 0.27)), var(--deep);
+  box-shadow: 0 22px 42px -12px rgba(var(--c), 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+.pick:active { translate: 0 0; scale: 0.96; transition-duration: 0.08s; background: linear-gradient(rgba(var(--c), 0.36), rgba(var(--c), 0.36)), var(--deep); }
+/* the keyboard's place: a white ring and a full-colour edge only (pointing lifts and lights; a ring alone never looks
+   like an answer already chosen) */
+.pick:focus-visible { outline: 2px solid var(--star); outline-offset: 4px; border-color: rgb(var(--c)); }
+.pick-icon { width: clamp(48px, 4.4vw, 62px); height: auto; overflow: visible; color: rgb(var(--c)); }
+.pick-icon * { transform-box: fill-box; transform-origin: center; }
+/* "It switches off": a light, its core, its rays and its glow (which breathes slowly). Pointed at, it goes out: the rays
+   draw in, the glow dies, the core is left hollow */
+.p-glow { fill: currentColor; opacity: 0.18; transition: opacity 0.5s var(--ease), scale 0.5s var(--ease); animation: ember 3.2s ease-in-out infinite alternate; }
+@keyframes ember { to { opacity: 0.3; } }
+.p-rays path { fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; }
+.p-rays { transition: opacity 0.45s var(--ease), scale 0.45s var(--ease); }
+.p-core { fill: currentColor; stroke: currentColor; stroke-width: 2.6; transition: fill-opacity 0.5s var(--ease) 0.1s; }
+.pick.off:hover .p-rays { opacity: 0; scale: 0.45; }
+.pick.off:hover .p-glow { opacity: 0; scale: 0.5; animation: none; }
+.pick.off:hover .p-core { fill-opacity: 0; }
+/* "It keeps going": four stars that twinkle out of step; pointed at, they twinkle faster and brighter */
+.p-star { fill: currentColor; animation: twinkle 2.8s ease-in-out infinite; }
+.p-star.s2 { animation-duration: 2.2s; animation-delay: -0.8s; }
+.p-star.s3 { animation-duration: 3.1s; animation-delay: -1.9s; }
+.p-star.s4 { animation-duration: 2.5s; animation-delay: -1.3s; }
+@keyframes twinkle { 0%, 100% { opacity: 1; scale: 1; } 50% { opacity: 0.4; scale: 0.72; } }
+.pick.on:hover .pick-icon { color: #dce9ff; }
+.pick.on:hover .p-star { animation-duration: 0.9s; }
+.pick.on:hover .p-star.s2 { animation-duration: 0.7s; }
+.pick.on:hover .p-star.s3 { animation-duration: 1.05s; }
+.bet-box #replay-past-2 { margin-top: clamp(14px, 2.6vh, 26px); animation: rise 0.6s 0.56s var(--ease) both; }
 
 /* the suspense, 1: the model's gauge, its chance that the galaxy switches off: blue below its line ("keeps going"),
    red past it ("switches off"), as everywhere in the game. Under the film, or beside it when the window leaves room. */
@@ -943,6 +1003,12 @@ body[data-screen="film"] .made-link, body[data-screen="3d"] .made-link { display
   .phase .say { font-size: 17px; }
   .bets { width: 100%; }
   .bets .btn { flex: 1 1 140px; }
+  /* the bet: the question a little smaller, the two answers side by side across the width */
+  .bet-moment { padding: 68px 16px 22px; }
+  .bet-q { font-size: clamp(25px, min(8.2vw, 7vh), 36px); max-width: none; }
+  .picks { gap: 12px; }
+  .pick { flex: 1 1 140px; min-height: min(150px, 30vh); padding: 18px 12px 16px; gap: 12px; font-size: 17px; }
+  .pick-icon { width: 48px; }
   .gauge { gap: 12px; }
   .gauge svg { width: 168px; }
   .g-say { font-size: 13px; }
@@ -963,6 +1029,11 @@ body[data-screen="film"] .made-link, body[data-screen="3d"] .made-link { display
   .r3-now dt { font-size: 12.5px; line-height: 1.3; }
   .see3d { --g: 80px; gap: 18px; }
   body[data-screen="3d"] #sky { opacity: 0.1; }
+}
+/* a very narrow phone: the two answers one above the other, each a wide bar with its picture before its words */
+@media (max-width: 339px) {
+  .pick { flex-basis: 100%; min-height: 0; grid-auto-flow: column; justify-content: center; align-items: center; gap: 14px; padding: 14px 18px; }
+  .pick-icon { width: 40px; }
 }
 
 /* ---- less motion: when the system asks for it, every animation and transition ends at once (0.01 ms, not 0,
