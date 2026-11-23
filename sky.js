@@ -13,7 +13,7 @@
 //      3c. where things go on screen   field, setField, place, resize
 //      3d. what the page asks for      set, setPlayer, setMarks, markAt, toScreen, playerScreen
 //      3e. painting a look             paint (every galaxy into off-screen layers)
-//      3f. the draw loop               drawLayers, frame (twinkle, drift, fade, marks, the player's galaxy)
+//      3f. the draw loop               drawLayers, placeNames, frame (twinkle, drift, fade, marks, the player's galaxy)
 // (The data itself is loaded by game.js; this file only draws it.)
 
 // =====================================================================
@@ -271,6 +271,51 @@ export class Sky {
     });
   }
 
+  /** Where each remarkable galaxy's name is written, as a Map: mark -> {x, y, align}. Its usual place is
+   *  on the right of its ring (on the left near the screen's right edge). On a small map (a phone) two
+   *  names can cross, cover the other ring or run off the screen: then I try the other places (the
+   *  other side, above, below) and keep the layout that moves the names the least. On a computer the
+   *  usual places are already free, so nothing moves. ctx must already have the names' font. */
+  placeNames(ctx) {
+    const named = (this.marks || []).filter((m) => !m.kind);   // the dots you met have no name here
+    const fl = this.field(this.w, this.h);
+    // half a name's height (13 px letters and their dark edge), how far a ring reaches, the margin to the screen's edge
+    const H = 9, RING = 12, EDGE = 10;
+    // the four places of each name, the usual one first; the usual place is free, the other side costs 1,
+    // above or below the ring 2
+    const choices = named.map((m) => {
+      const p = this.toScreen(m), wd = ctx.measureText(m.label).width, usualLeft = p.x > this.w * 0.8;
+      const side = (x, align, price) => ({ x, y: p.y, align, l: align === "left" ? x : x - wd, r: align === "left" ? x + wd : x, price });
+      const right = side(p.x + 18, "left", usualLeft ? 1 : 0), left = side(p.x - 18, "right", usualLeft ? 0 : 1);
+      const level = (y) => ({ x: p.x, y, align: "center", l: p.x - wd / 2, r: p.x + wd / 2, price: 2 });
+      return { p, places: [...(usualLeft ? [left, right] : [right, left]), level(p.y - 20), level(p.y + 20)] };
+    });
+    // the clashes of one layout: a name off the map, two names that cross, a name over another galaxy's ring
+    const clashes = (pick) => {
+      let n = 0;
+      pick.forEach((a, i) => {
+        if (a.l < EDGE || a.r > this.w - EDGE || a.y - H < fl.t - 16 || a.y + H > fl.b + 8) n++;
+        pick.forEach((b, j) => {
+          if (j > i && a.l < b.r + 2 && b.l < a.r + 2 && Math.abs(a.y - b.y) < 2 * H + 2) n++;
+          const c = choices[j].p;
+          if (j !== i && a.l < c.x + RING && c.x - RING < a.r && Math.abs(a.y - c.y) < H + RING) n++;
+        });
+      });
+      return n;
+    };
+    // I try every layout (four places for each of the three names: 64 layouts) and keep the cheapest one;
+    // a clash costs far more than any move, so a layout without a clash always wins
+    let best = choices.map((c) => c.places[0]), bestCost = Infinity;
+    const layouts = choices.length <= 5 ? 4 ** choices.length : 1;
+    for (let code = 0; code < layouts; code++) {
+      const pick = choices.map((c, i) => c.places[Math.floor(code / 4 ** i) % 4]);   // code written in base 4: one digit per name
+      const cost = pick.reduce((s, a) => s + a.price, 0) + 100 * clashes(pick);
+      if (cost < bestCost) { best = pick; bestCost = cost; }
+      if (cost === 0) break;                                  // the usual places are all free: nothing moves
+    }
+    return new Map(named.map((m, i) => [m, best[i]]));
+  }
+
   /** One frame of the sky; t is the time in ms given by requestAnimationFrame. */
   frame(t) {
     const ctx = this.canvas.getContext("2d");
@@ -298,6 +343,7 @@ export class Sky {
       ctx.setTransform(this.ratio, 0, 0, this.ratio, dx, dy);
       ctx.font = "600 13px Figtree, 'Segoe UI', sans-serif";
       ctx.textBaseline = "middle";
+      const names = this.placeNames(ctx);                      // the place of each remarkable galaxy's name
       const backed = (draw) => {                               // the light bands pass behind: the names get a soft dark halo
         ctx.shadowColor = "rgba(3,4,11,0.95)"; ctx.shadowBlur = 7 * this.ratio;
         draw();
@@ -344,13 +390,12 @@ export class Sky {
         ctx.strokeStyle = on ? "#fff" : "rgba(238,241,255,0.7)";
         ctx.lineWidth = on ? 2 : 1.2;
         ctx.beginPath(); ctx.arc(p.x, p.y, on ? 11 : 8, 0, 2 * Math.PI); ctx.stroke();
-        const right = p.x > this.w * 0.8;
-        ctx.textAlign = right ? "right" : "left";
-        const lx = p.x + (right ? -18 : 18);
+        const at = names.get(m);                                 // where its name goes (worked out by placeNames)
+        ctx.textAlign = at.align;
         ctx.lineJoin = "round"; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(3,4,11,0.92)";
-        backed(() => ctx.strokeText(m.label, lx, p.y));
+        backed(() => ctx.strokeText(m.label, at.x, at.y));
         ctx.fillStyle = on ? "#fff" : "rgba(238,241,255,0.8)";
-        ctx.fillText(m.label, lx, p.y);
+        ctx.fillText(m.label, at.x, at.y);
       });
     }
     if (!this.player) return;                            // no galaxy chosen yet: the frame is done
